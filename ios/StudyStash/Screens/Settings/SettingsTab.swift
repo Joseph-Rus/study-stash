@@ -18,6 +18,7 @@ struct SettingsTab: View {
     @State private var reach: Reach = .checking
     @State private var confirming = false
     @State private var showUses = false
+    @State private var debugOpened = false
 
     /// Whether the library answered the last time this page asked.
     enum Reach { case checking, connected, unreachable }
@@ -58,7 +59,10 @@ struct SettingsTab: View {
         .task { await look() }
         .onAppear {
             #if DEBUG
-            if DebugLaunch.value("-settings") == "uses" { showUses = true }
+            if DebugLaunch.value("-settings") == "uses", !debugOpened {
+                debugOpened = true
+                Task { try? await Task.sleep(for: .milliseconds(300)); showUses = true }
+            }
             #endif
         }
         .confirmationDialog("Remove this \(device) from \(app.libraryName)?", isPresented: $confirming, titleVisibility: .visible) {
@@ -128,10 +132,10 @@ struct SettingsTab: View {
                     RowRule()
                     SettingsRow(title: libraryName, detail: libraryDetail) {
                         switch reach {
-                        case .connected: Text("Connected").textStyle(.body).foregroundStyle(.ink)
-                        case .checking: Text("Asking…").textStyle(.body).foregroundStyle(.inkSubtle)
+                        case .connected: Text("Connected").textStyle(.body).foregroundStyle(.ink).fixedSize()
+                        case .checking: Text("Asking…").textStyle(.body).foregroundStyle(.inkSubtle).fixedSize()
                         case .unreachable:
-                            Button("Try again") { Task { await tryAgain() } }.buttonStyle(.pill(small: true))
+                            Button("Try again") { Task { await tryAgain() } }.buttonStyle(.pill(small: true)).fixedSize()
                         }
                     }
                     if let base = app.api?.base {
@@ -360,6 +364,8 @@ private struct SettingsRow<Trailing: View>: View {
 
     var body: some View {
         HStack(spacing: 12) {
+            // The words first: a short title keeps its width, a value beside it takes what's left (and loses its
+            // middle if it must); long words wrap beside a button.
             VStack(alignment: .leading, spacing: 3) {
                 Text(title).textStyle(.body).foregroundStyle(.ink)
                     .fixedSize(horizontal: false, vertical: true)
@@ -371,7 +377,8 @@ private struct SettingsRow<Trailing: View>: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .layoutPriority(1)
+            Spacer(minLength: 0)
             trailing
         }
         .padding(.horizontal, 16)
@@ -389,7 +396,6 @@ private struct Value: View {
         Text(text).textStyle(.body).foregroundStyle(.inkMuted)
             .lineLimit(1)
             .truncationMode(.middle)
-            .layoutPriority(-1)
     }
 }
 
