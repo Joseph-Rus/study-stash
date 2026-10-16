@@ -87,7 +87,7 @@ final class Recorder {
         guard !isActive else { return }
         phase = .preparing("Getting the microphone…")
         guard await AVAudioApplication.requestRecordPermission() else {
-            phase = .failed("Study Stash can't use the microphone. Turn it on in Settings → Study Stash.")
+            phase = .failed("Study Stash can't use the microphone. Turn it on in Settings, then Study Stash.")
             return
         }
         let id = Recording.newID()
@@ -277,13 +277,13 @@ final class Recorder {
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
-    /// "This matters": the moment, starred in what's typed, so the notes make something of it.
+    /// "This matters": the moment, marked in what's typed, so the notes make something of it.
     func mark() {
         guard isActive else { return }
         let at = Format.clock(elapsed)
         let said = (recording?.segments.last?.text ?? volatile).split(separator: " ").suffix(8).joined(separator: " ")
         update { r in
-            let line = "- ⭐ Important at \(at)" + (said.isEmpty ? "" : ": “…\(said)”")
+            let line = "- Important at \(at)" + (said.isEmpty ? "" : ": “…\(said)”")
             r.notes = r.notes.isEmpty || r.notes.hasSuffix("\n") ? r.notes + line + "\n" : r.notes + "\n" + line + "\n"
         }
         UIImpactFeedbackGenerator(style: .rigid).impactOccurred()

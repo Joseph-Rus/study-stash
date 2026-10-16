@@ -57,10 +57,11 @@ struct Recording: Codable, Identifiable, Hashable, Sendable {
         return s >= 3600 ? String(format: "%d:%02d:%02d", s / 3600, (s % 3600) / 60, s % 60) : String(format: "%02d:%02d", s / 60, s % 60)
     }
 
+    /// Its title, or until it has one the desktop's working title: "Calculus II, Fri 16 Oct", or with no class
+    /// "Recording, Fri 16 Oct at 9:41 AM".
     var displayTitle: String {
         if !title.isEmpty { return title }
-        let day = started.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated))
-        return className.map { "\($0), \(day)" } ?? "Recording, \(day) at \(started.formatted(date: .omitted, time: .shortened))"
+        return Nouns.untitled(folder: className, date: Self.localISO(started))
     }
 
     /// What POST /api/v2/lectures takes.
