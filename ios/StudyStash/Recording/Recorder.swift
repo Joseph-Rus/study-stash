@@ -238,7 +238,16 @@ final class Recorder {
         store.save(r)
         teardown()
         UINotificationFeedbackGenerator().notificationOccurred(.success)
-        if let api { await store.send(r.id, api: api) }
+        if let api {
+            await store.send(r.id, api: api)
+            // Ink written during it goes with it, once the library has the lecture.
+            if store.recordings.first(where: { $0.id == r.id })?.state == .sent {
+                for n in NotebookStore.shared.notebooks where n.lectureID == r.id {
+                    let inked = n.pages.contains { !NotebookStore.shared.drawing(n, $0).strokes.isEmpty }
+                    if inked { try? await NotebookStore.shared.upload(n.id, api: api) }
+                }
+            }
+        }
     }
 
     /// Throw it away.
@@ -264,6 +273,18 @@ final class Recorder {
         levels = Array(repeating: 0, count: levels.count)
         phase = .idle
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    }
+
+    /// "This matters": the moment, starred in what's typed, so the notes make something of it.
+    func mark() {
+        guard isActive else { return }
+        let at = Format.clock(elapsed)
+        let said = (recording?.segments.last?.text ?? volatile).split(separator: " ").suffix(8).joined(separator: " ")
+        update { r in
+            let line = "- ⭐ Important at \(at)" + (said.isEmpty ? "" : ": “…\(said)”")
+            r.notes = r.notes.isEmpty || r.notes.hasSuffix("\n") ? r.notes + line + "\n" : r.notes + "\n" + line + "\n"
+        }
+        UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
     }
 
     /// Edit what was typed, the title or the class while it records.

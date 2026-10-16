@@ -12,6 +12,8 @@ struct RecordView: View {
     @State private var pane: Pane = .transcript
     @State private var confirmingDiscard = false
     @State private var sent: Recording?
+    @State private var writing: (id: String, title: String)?
+    @State private var marked = 0
     @FocusState private var typing: Bool
 
     var body: some View {
@@ -28,7 +30,11 @@ struct RecordView: View {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Hide", systemImage: "chevron.down") { dismiss() }
                 }
-                if recorder.isActive {
+                if recorder.isActive, let r = recorder.recording {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button { writing = (r.id, r.displayTitle) } label: { Image(systemName: "pencil.and.scribble") }
+                            .accessibilityLabel("Write notes by hand")
+                    }
                     ToolbarItem(placement: .topBarTrailing) {
                         Menu {
                             Button("Discard recording", systemImage: "trash", role: .destructive) { confirmingDiscard = true }
@@ -43,6 +49,9 @@ struct RecordView: View {
             }
         }
         .interactiveDismissDisabled(recorder.phase == .finishing)
+        .fullScreenCover(isPresented: Binding(get: { writing != nil }, set: { if !$0 { writing = nil } })) {
+            if let w = writing { HandwritingView(className: recorder.recording?.className, lecture: w) }
+        }
         .task {
             if recorder.phase == .idle || isFailed {
                 await recorder.start(className: startClass)
@@ -133,7 +142,7 @@ struct RecordView: View {
     }
 
     private var controls: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: 12) {
             Button {
                 recorder.phase == .paused ? recorder.resume() : recorder.pause()
             } label: {
@@ -157,6 +166,21 @@ struct RecordView: View {
                     .frame(height: 22)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+
+            Button {
+                recorder.mark()
+                marked += 1
+            } label: {
+                Image(systemName: "star.fill")
+                    .font(.title3)
+                    .foregroundStyle(.yellow)
+                    .frame(width: 48, height: 48)
+                    .symbolEffect(.bounce, value: marked)
+            }
+            .buttonStyle(.glass)
+            .buttonBorderShape(.circle)
+            .accessibilityLabel("Mark this moment")
+            .disabled(recorder.phase == .finishing)
 
             Button {
                 Task {
