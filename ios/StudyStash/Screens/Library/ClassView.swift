@@ -19,7 +19,6 @@ struct ClassView: View {
     @State private var recorder = Recorder.shared
     @State private var notebooks = NotebookStore.shared
     @State private var asking = false
-    @State private var searching = false
     @State private var openNotebook: NotebookID?
     @State private var width: CGFloat = 0
     @State private var message: String?
@@ -66,21 +65,10 @@ struct ClassView: View {
         .foregroundStyle(.ink)
         .page()
         .titleOnScroll(name)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    // FLOWS: scope these results to the class once the core's search takes one.
-                    Button("Search in \(name)", icon: "search") { searching = true }
-                } label: {
-                    Label("More", icon: "more_horiz")
-                }
-                .accessibilityLabel("More for \(name)")
-            }
-        }
-        // FLOWS: .recordsInto(name) once the core is in, so the Record bar says "Record Calculus II" and records here.
+        // While this page shows, the Record bar says "Record Calculus II" and records into it.
+        .recordsInto(name)
         .toast($message)
         .sheet(isPresented: $asking) { AskSheet(scope: .class(name)) }
-        .navigationDestination(isPresented: $searching) { SearchResultsView(query: name) }
         .fullScreenCover(item: $openNotebook) { NotebookEditor(id: $0.id) }
         .refreshable { await load() }
         .task {
@@ -97,6 +85,11 @@ struct ClassView: View {
         // What was attached from here shows when the Attach sheet closes; a recording, when the recorder does.
         .onChange(of: app.incoming?.id) { _, now in if now == nil { Task { await files?.load() } } }
         .onChange(of: app.showingRecorder) { _, now in if !now { Task { await lectures?.load() } } }
+        // Going somewhere from a sheet (an Ask source) closes what this page opened.
+        .onChange(of: app.dismissal) {
+            asking = false
+            openNotebook = nil
+        }
     }
 
     private func load() async {
@@ -152,8 +145,7 @@ struct ClassView: View {
     /// Attach: the one Attach sheet, for this folder (scan pages, photos, files, write notes, a recording, GoodNotes).
     private var attach: some View {
         Button {
-            // FLOWS: app.incoming = .attach(className: name, lecture: nil) once the core is in.
-            app.incoming = .files([], className: name, lecture: nil)
+            app.incoming = .attach(className: name, lecture: nil)
         } label: {
             Label("Attach", icon: "attach_file")
         }
@@ -190,9 +182,7 @@ struct ClassView: View {
                 .buttonStyle(.row)
                 .accessibilityLabel("\(row.item.name), \(row.late ? "missing, " : "due ")\(row.when)")
             }
-            Button("See these on the calendar") {
-                // FLOWS: app.showDue(class: name) once the core is in (Due, filtered to this class).
-            }
+            Button("See these on the calendar") { app.showDue(class: name) }
             .buttonStyle(.textLink)
             .padding(.top, 6)
         }
@@ -242,15 +232,15 @@ struct ClassView: View {
         }
     }
 
-    /// The one Record on the page, for an empty class: records into it (or, while something records, opens that).
+    /// The one Record on the page, for an empty class: records into it. While something records it says so, and a
+    /// tap opens the recording (Stop is there, so what happens after it is the same wherever it started).
     private var recordHere: some View {
         let state: RecordState = recorder.phase == .recording ? .recording : recorder.phase == .paused ? .paused : .idle
         return RecordButton(state: state,
                             words: state == .idle ? "Record" : recorder.recording?.className ?? "Recording",
                             elapsed: Format.clock(recorder.elapsed),
                             levels: recorder.levels,
-                            action: { app.record(for: state == .idle ? name : recorder.recording?.className) },
-                            stop: { Task { await recorder.stop(api: app.api) } })
+                            action: { app.record(for: name) })
             .fixedSize()
             .accessibilityHint(state == .idle ? "Records a \(noun) into \(name)" : "Opens the recording")
     }
@@ -277,11 +267,28 @@ struct ClassView: View {
     private var classNotebooks: [Notebook] {
         notebooks.notebooks.filter { $0.className == name }.sorted { $0.updated > $1.updated }
     }
-    private var hasAttached: Bool { !classNotebooks.isEmpty || !(files?.value ?? []).isEmpty }
+    private var hasAttached: Bool { !classNotebooks.isEmpty || !shownFiles.isEmpty }
+
+    private var shownFiles: [Attachment] {
+        #if DEBUG
+        // `-class-files`: three made-up files, for pictures (the demo library has none).
+        if DebugLaunch.flag("-class-files") {
+            return [
+                Attachment(id: "s1", name: "Week 7 slides.pdf", class: name, lecture: nil, size: 2_480_000, type: "application/pdf",
+                           added: "2026-10-14T10:00:00", hasText: true, reading: false),
+                Attachment(id: "s2", name: "My notes, 15 Oct.jpg", class: name, lecture: nil, size: 830_000, type: "image/jpeg",
+                           added: "2026-10-15T11:00:00", hasText: false, reading: true),
+                Attachment(id: "s3", name: "Syllabus.pdf", class: name, lecture: nil, size: 190_000, type: "application/pdf",
+                           added: "2026-09-01T09:00:00", hasText: true, reading: false),
+            ]
+        }
+        #endif
+        return files?.value ?? []
+    }
 
     /// This class's notebooks on this phone (a tap opens one) and the files attached to it (a tap shows one).
     private func attached(heading: AppText) -> some View {
-        let books = classNotebooks, list = files?.value ?? []
+        let books = classNotebooks, list = shownFiles
         let title = books.isEmpty ? "Files" : list.isEmpty ? "Notebooks" : "Notebooks and files"
         return VStack(alignment: .leading, spacing: 0) {
             SectionTitle(title, style: heading)
@@ -373,10 +380,11 @@ private struct NotebookCover: View {
 /// The words a folder's page says, as the desktop's OverviewModel says them (ForClass, Meets, NextMeets, Rail).
 enum ClassWords {
     /// "MATH 162 on Canvas. Meets Tuesday and Thursday at 9:00 AM."; "Club meetings, Thursdays at 6:00 PM."; "3
-    /// lectures so far." when the calendar says nothing of it. `group` is "" for a class; a code means it's on Canvas.
+    /// lectures so far." when the calendar says nothing of it. `noun` says whether it's a class ("lecture"); `group`
+    /// names a club's or work's meetings; a code means it's on Canvas.
     static func lede(name: String, group: String, code: String, noun: String, count: Int, events: [UpcomingEvent],
                      now: Date = .now) -> String {
-        let isClass = group.isEmpty
+        let isClass = noun == "lecture"
         var parts: [String] = []
         if isClass, !code.isEmpty, code.caseInsensitiveCompare(name) != .orderedSame { parts.append("\(code) on Canvas.") }
         let when = meets(name: name, events: events, asClass: isClass, now: now)
