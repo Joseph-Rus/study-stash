@@ -1,67 +1,63 @@
 import SwiftUI
 
-/// Recording a lecture: what's said appearing as it's said, a page to type notes on, and the controls in glass at
-/// the bottom. The class is the one on the calendar now, or picked here.
+/// Recording a lecture: the lecture's page while it records, as the desktop's note page is (NotePage.axaml, the spec's
+/// 5.5). At the top the recording's bar (its dot breathing, "Recording", the level, the time, Pause, and Stop in ink,
+/// in a red outline); then where it's filed and when (the class is a button: the class picker), its title, and
+/// Notes | Live transcript: the student's own notes, typed as it records, and what's been heard so far, written down
+/// on this phone. Stop closes it and opens the lecture (its notes being written), or, when it couldn't be sent, the
+/// recording on this phone.
 struct RecordView: View {
     @Environment(AppModel.self) private var app
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var recorder = Recorder.shared
     var startClass: String?
+    /// The title it starts with: the calendar event's, or the page's it was started on ("Calculus II, Fri 16 Oct").
+    var startTitle: String = ""
 
-    enum Pane: String, CaseIterable { case transcript = "Transcript", notes = "My notes" }
-    @State private var pane: Pane = .transcript
+    enum Pane: Hashable { case notes, transcript }
+    @State private var pane: Pane = DebugLaunch.value("-pane") == "transcript" ? .transcript : .notes
     @State private var confirmingDiscard = false
-    @State private var sent: Recording?
     @State private var writing: (id: String, title: String)?
-    @State private var marked = 0
+    @State private var toast: String?
     @FocusState private var typing: Bool
 
     var body: some View {
         NavigationStack {
-            ZStack(alignment: .bottom) {
-                Color.surface.ignoresSafeArea()
-                if let sent {
-                    SentView(recording: sent) { dismiss() }
-                } else {
-                    content
+            content
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .page()
+                .foregroundStyle(.ink)
+                .toolbar { toolbar }
+                .confirmationDialog("Discard this recording?", isPresented: $confirmingDiscard, titleVisibility: .visible) {
+                    Button("Discard", role: .destructive) { recorder.discard(); dismiss() }
+                } message: {
+                    Text("What was said and what you typed are deleted from this phone.")
                 }
-            }
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Hide", systemImage: "chevron.down") { dismiss() }
-                }
-                if recorder.isActive, let r = recorder.recording {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button { writing = (r.id, r.displayTitle) } label: { Image(systemName: "pencil.and.scribble") }
-                            .accessibilityLabel("Write notes by hand")
-                    }
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Menu {
-                            Button("Discard recording", systemImage: "trash", role: .destructive) { confirmingDiscard = true }
-                        } label: { Image(systemName: "ellipsis") }
+                .toast($toast)
+                // Write by hand: the notebook for this recording, pushed inside the recorder (never a second cover).
+                .navigationDestination(isPresented: Binding(get: { writing != nil }, set: { if !$0 { writing = nil } })) {
+                    if let w = writing {
+                        HandwritingView(className: recorder.recording?.className, lecture: w, embedded: true)
                     }
                 }
-            }
-            .confirmationDialog("Discard this recording?", isPresented: $confirmingDiscard, titleVisibility: .visible) {
-                Button("Discard", role: .destructive) { recorder.discard(); dismiss() }
-            } message: {
-                Text("What was said and what you typed are deleted from this phone.")
-            }
         }
+        .presentationSizing(.page)
         .interactiveDismissDisabled(recorder.phase == .finishing)
-        .fullScreenCover(isPresented: Binding(get: { writing != nil }, set: { if !$0 { writing = nil } })) {
-            if let w = writing { HandwritingView(className: recorder.recording?.className, lecture: w) }
-        }
         .task {
             if recorder.phase == .idle || isFailed {
-                await recorder.start(className: startClass)
+                await recorder.start(className: startClass, title: startTitle)
             }
             #if DEBUG
+            // Pictures: `-pause-after <s>` pauses, `-stop-after <s>` stops (`-keep-on-phone` as if it couldn't be
+            // sent); `-pick-class` opens the class picker (ClassPicker reads it).
+            if let after = DebugLaunch.value("-pause-after").flatMap(Double.init) {
+                try? await Task.sleep(for: .seconds(after))
+                recorder.pause()
+            }
             if let after = DebugLaunch.value("-stop-after").flatMap(Double.init) {
                 try? await Task.sleep(for: .seconds(after))
-                let id = recorder.recording?.id
-                await recorder.stop(api: app.api)
-                sent = RecordingStore.shared.recordings.first { $0.id == id }
+                await stop()
             }
             #endif
         }
@@ -69,179 +65,335 @@ struct RecordView: View {
 
     private var isFailed: Bool { if case .failed = recorder.phase { true } else { false } }
 
+    /// Stop: the last words written down, kept, sent; then the recorder closes and the lecture opens (or, not sent,
+    /// the recording on this phone).
+    private func stop() async {
+        guard let id = recorder.recording?.id else { return }
+        typing = false
+        await recorder.stop(api: app.api)
+        var sent = RecordingStore.shared.recordings.first { $0.id == id }?.state == .sent
+        #if DEBUG
+        if DebugLaunch.flag("-keep-on-phone") { sent = false }
+        #endif
+        app.recordingFinished(id: id, sent: sent)
+    }
+
+    // MARK: the toolbar
+
+    @ToolbarContentBuilder private var toolbar: some ToolbarContent {
+        ToolbarItem(placement: .topBarLeading) {
+            Button { dismiss() } label: { Image(icon: "expand_more") }
+                .accessibilityLabel(recorder.isActive ? "Hide. It keeps recording" : "Close")
+        }
+        if recorder.isActive, let r = recorder.recording {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                Button { mark() } label: { Image(icon: "bookmark") }
+                    .accessibilityLabel("Mark this moment")
+                    .disabled(recorder.phase == .finishing)
+                Button { writing = (r.id, r.displayTitle) } label: { Image(icon: "edit_note") }
+                    .accessibilityLabel("Write by hand")
+                    .disabled(recorder.phase == .finishing)
+                Menu {
+                    Button("Discard recording", icon: "delete", role: .destructive) { confirmingDiscard = true }
+                } label: { Image(icon: "more_horiz") }
+                    .accessibilityLabel("More")
+            }
+        }
+    }
+
+    /// "This matters": the moment and its last words go in the notes ("Important at 12:04: …"), and a toast says so.
+    private func mark() {
+        let at = Format.clock(recorder.elapsed)
+        recorder.mark()
+        toast = "Marked \(at) in your notes"
+    }
+
+    // MARK: getting ready, couldn't, recording
+
     @ViewBuilder private var content: some View {
         switch recorder.phase {
         case .preparing(let words):
-            VStack(spacing: 14) {
-                ProgressView().controlSize(.large)
-                Text(words).font(.callout).foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 12) {
+                ProgressView().tint(.inkSubtle)
+                Text(words).textStyle(.lede).foregroundStyle(.inkMuted)
             }
-            .frame(maxHeight: .infinity)
+            .padding(.horizontal, Space.pageCompact)
+            .padding(.top, 24)
         case .failed(let words):
-            ContentUnavailableView {
-                Label("Can't record", systemImage: "mic.slash")
-            } description: {
-                Text(words)
-            } actions: {
-                Button("Try again") { Task { await recorder.start(className: startClass) } }.buttonStyle(.borderedProminent)
-            }
+            CantRecord(words: words) { Task { await recorder.start(className: startClass, title: startTitle) } }
+        case .idle where recorder.recording == nil:
+            // For a moment before it starts.
+            ProgressView().tint(.inkSubtle).padding(.horizontal, Space.pageCompact).padding(.top, 24)
         default:
-            recordingBody
+            recordingPage
         }
     }
 
-    private var recordingBody: some View {
-        VStack(spacing: 0) {
-            header
-            Picker("Show", selection: $pane.animation(.snappy)) {
-                ForEach(Pane.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+    private var recordingPage: some View {
+        let wide = sizeClass == .regular
+        return VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 0) {
+                RecordingBar(recorder: recorder) { Task { await stop() } }
+                    .padding(.top, 8)
+                    .padding(.bottom, 20)
+                header
+                if !wide {
+                    TabStrip(selection: $pane, tabs: [(.notes, "Notes"), (.transcript, "Live transcript")])
+                        .padding(.top, 18)
+                }
             }
-            .pickerStyle(.segmented)
-            .padding(.horizontal, 20)
-            .padding(.bottom, 8)
-
-            switch pane {
-            case .transcript: LiveTranscript(recorder: recorder)
-            case .notes: notesEditor
+            .padding(.horizontal, wide ? 32 : Space.pageCompact)
+            if wide {
+                // An iPad: the notes and what's been said side by side.
+                HStack(alignment: .top, spacing: 0) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        paneTitle("Notes").padding(.horizontal, 32)
+                        notesEditor
+                    }
+                    Rectangle().fill(.line).frame(width: 1).padding(.top, 18)
+                    VStack(alignment: .leading, spacing: 0) {
+                        paneTitle("Live transcript").padding(.horizontal, 24)
+                        LiveTranscript(recorder: recorder, inset: 24)
+                    }
+                }
+                .padding(.top, 18)
+            } else {
+                switch pane {
+                case .notes: notesEditor
+                case .transcript: LiveTranscript(recorder: recorder)
+                }
             }
         }
-        .safeAreaInset(edge: .bottom) { controls }
+        .frame(maxWidth: wide ? 1100 : .infinity)
+        .frame(maxWidth: .infinity)
     }
 
+    private func paneTitle(_ words: String) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(words).textStyle(.tab).foregroundStyle(.ink).padding(.vertical, 10)
+            Rule()
+        }
+    }
+
+    /// Where it's filed (its class, the picker) and when; then its title, typed over to name it.
     private var header: some View {
         let r = recorder.recording
+        let cls = r?.className
+        let date = r.map { Recording.localISO($0.started) }
+        let crumb = Nouns.capital(app.noun(of: cls)) + (date.map { ", " + Format.noteWhen($0, nil) } ?? "")
+        let picker = ClassPicker(selection: Binding(get: { recorder.recording?.className },
+                                                    set: { c in recorder.update { $0.className = c } }))
         return VStack(alignment: .leading, spacing: 8) {
-            ClassPicker(selection: Binding(get: { r?.className }, set: { c in recorder.update { $0.className = c } }))
-            TextField("Add a title", text: Binding(
+            if sizeClass == .regular {
+                HStack(spacing: 10) {
+                    picker
+                    Text(crumb).textStyle(.crumb).foregroundStyle(.inkMuted).lineLimit(1)
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 0) {
+                    picker
+                    Text(crumb).textStyle(.crumb).foregroundStyle(.inkMuted)
+                }
+            }
+            TextField("Title", text: Binding(
                 get: { r?.title ?? "" },
-                set: { t in recorder.update { $0.title = t; $0.titleTyped = !t.isEmpty } }), axis: .vertical)
-                .font(.app(.docTitle))
+                set: { t in recorder.update { $0.title = t; $0.titleTyped = !t.isEmpty } }),
+                prompt: Text(Nouns.untitled(folder: cls, date: date)).foregroundStyle(.ink),
+                axis: .vertical)
+                .textStyle(.docTitle)
+                .foregroundStyle(.ink)
                 .lineLimit(1...3)
                 .submitLabel(.done)
+                .accessibilityLabel("Title")
         }
-        .padding(.horizontal, 20)
-        .padding(.bottom, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    /// The student's own notes, as they type them: ink and a little heavy, as "What you wrote" is on the desktop. The
+    /// cursor is in it from the start.
     private var notesEditor: some View {
-        TextEditor(text: Binding(get: { recorder.recording?.notes ?? "" }, set: { n in recorder.update { $0.notes = n } }))
+        let empty = (recorder.recording?.notes ?? "").isEmpty
+        let inset = sizeClass == .regular ? 32 : Space.pageCompact
+        return TextEditor(text: Binding(get: { recorder.recording?.notes ?? "" }, set: { n in recorder.update { $0.notes = n } }))
             .focused($typing)
-            .font(.body)
+            .font(.atkinson(16, .semibold, relativeTo: .body))
+            .lineSpacing(5)
+            .foregroundStyle(.ink)
             .scrollContentBackground(.hidden)
-            .padding(.horizontal, 16)
+            .padding(.horizontal, inset - 5)
+            .padding(.top, 10)
             .overlay(alignment: .topLeading) {
-                if (recorder.recording?.notes ?? "").isEmpty {
-                    Text("Type what matters as you hear it. Your notes are kept as you wrote them, and the lecture's notes are written around them.")
-                        .font(.body).foregroundStyle(.tertiary)
-                        .padding(.horizontal, 21).padding(.top, 8)
-                        .allowsHitTesting(false)
+                if empty {
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text("Your notes").font(.atkinson(16, .semibold, relativeTo: .body)).foregroundStyle(.inkSubtle)
+                        Text(Self.hint).textStyle(.summary, italic: true).foregroundStyle(.inkSubtle)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.horizontal, inset)
+                    .padding(.top, 18)
+                    .allowsHitTesting(false)
                 }
             }
-            .onAppear { typing = true }
+            .accessibilityLabel("Your notes")
+            .accessibilityHint(Self.hint)
+            .task {
+                // The cursor in the notes, once the sheet has come up.
+                try? await Task.sleep(for: .milliseconds(600))
+                typing = true
+            }
     }
 
-    private var controls: some View {
-        HStack(spacing: 12) {
-            Button {
-                recorder.phase == .paused ? recorder.resume() : recorder.pause()
-            } label: {
-                Image(systemName: recorder.phase == .paused ? "play.fill" : "pause.fill")
-                    .font(.title3)
-                    .frame(width: 48, height: 48)
-            }
-            .buttonStyle(.glass)
-            .buttonBorderShape(.circle)
-            .disabled(recorder.phase == .finishing)
+    static let hint = "Write as much or as little as you like. When you stop, your notes are written up around what you typed."
+}
 
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    Circle().fill(recorder.phase == .recording ? .red : .orange).frame(width: 8, height: 8)
-                        .opacity(recorder.phase == .recording ? 1 : 0.6)
-                    Text(Format.clock(recorder.elapsed)).font(.title3.monospacedDigit().weight(.semibold))
-                    if recorder.phase == .paused { Text("Paused").font(.caption.weight(.medium)).foregroundStyle(.orange) }
-                    if recorder.phase == .finishing { Text("Saving…").font(.caption.weight(.medium)).foregroundStyle(.secondary) }
-                }
-                Waveform(levels: recorder.levels, active: recorder.phase == .recording)
-                    .frame(height: 22)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+// MARK: - The recording's bar
 
-            Button {
-                recorder.mark()
-                marked += 1
-            } label: {
-                Image(systemName: "star.fill")
-                    .font(.title3)
-                    .foregroundStyle(.yellow)
-                    .frame(width: 48, height: 48)
-                    .symbolEffect(.bounce, value: marked)
-            }
-            .buttonStyle(.glass)
-            .buttonBorderShape(.circle)
-            .accessibilityLabel("Mark this moment")
-            .disabled(recorder.phase == .finishing)
+/// The desktop's recording bar (`.recbar`, role status): a red outline on the page's white, the panel's corners; the
+/// dot breathing while it records, "Recording" (or "Paused", the dot still), the level, the time, then Pause (Resume)
+/// and Stop, the ink button. After Stop, "Saving…". Where a phone is too narrow for all of it, Pause shows its icon
+/// alone.
+private struct RecordingBar: View {
+    var recorder: Recorder
+    var stop: () -> Void
 
-            Button {
-                Task {
-                    let id = recorder.recording?.id
-                    await recorder.stop(api: app.api)
-                    sent = RecordingStore.shared.recordings.first { $0.id == id }
-                }
-            } label: {
-                Group {
-                    if recorder.phase == .finishing { ProgressView().tint(.white) } else { Image(systemName: "stop.fill").font(.title3) }
-                }
-                .frame(width: 48, height: 48)
-            }
-            .buttonStyle(.glassProminent)
-            .buttonBorderShape(.circle)
-            .tint(.red)
-            .disabled(recorder.phase == .finishing)
+    var body: some View {
+        let phase = recorder.phase
+        let word = phase == .finishing ? "Saving…" : phase == .paused ? "Paused" : "Recording"
+        let time = Format.clock(recorder.elapsed)
+        ViewThatFits(in: .horizontal) {
+            row(word: word, time: time, pauseWords: true)
+            row(word: word, time: time, pauseWords: false)
         }
-        .padding(12)
-        .glassEffect(.regular, in: .rect(cornerRadius: 32))
-        .padding(.horizontal, 12)
-        .padding(.bottom, 4)
+        .padding(.vertical, 8)
+        .padding(.leading, 16)
+        .padding(.trailing, 8)
+        .background(.surface, in: .rect(cornerRadius: Radius.panel))
+        .overlay(RoundedRectangle(cornerRadius: Radius.panel).strokeBorder(.record, lineWidth: 1.5))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(word), \(time)")
+        .accessibilityAddTraits(.updatesFrequently)
+    }
+
+    private func row(word: String, time: String, pauseWords: Bool) -> some View {
+        let phase = recorder.phase
+        let paused = phase == .paused
+        let finishing = phase == .finishing
+        return HStack(spacing: 12) {
+            PulseDot(pulsing: phase == .recording)
+            Text(word).font(.atkinson(15, .bold, relativeTo: .body)).foregroundStyle(.ink).fixedSize()
+            if phase == .recording { LevelBars(levels: recorder.levels) }
+            Text(time).font(.atkinson(15, .medium, relativeTo: .body)).foregroundStyle(.inkMuted).fixedSize()
+            Spacer(minLength: 4)
+            Button {
+                paused ? recorder.resume() : recorder.pause()
+            } label: {
+                if pauseWords {
+                    Label(paused ? "Resume" : "Pause", icon: paused ? "play_arrow" : "pause")
+                } else {
+                    Icon(paused ? "play_arrow" : "pause", size: 16)
+                }
+            }
+            .buttonStyle(.pill(small: true))
+            .disabled(finishing)
+            .accessibilityLabel(paused ? "Resume" : "Pause")
+            Button(action: stop) {
+                HStack(spacing: 8) {
+                    if finishing {
+                        ProgressView().controlSize(.mini).tint(.surface)
+                    } else {
+                        RoundedRectangle(cornerRadius: 2).fill(.surface).frame(width: 10, height: 10)
+                    }
+                    Text("Stop")
+                }
+            }
+            .buttonStyle(.pill(small: true, ink: true))
+            .disabled(finishing)
+            .accessibilityLabel("Stop recording")
+            .accessibilityHint("Its notes are written next")
+        }
     }
 }
 
-/// What's been said, newest at the bottom, the words not settled yet in grey.
+/// The recording's dot: red, breathing while it records (not while paused, nor for someone who asked for less
+/// motion), as the desktop's 1.6-second pulse.
+struct PulseDot: View {
+    var pulsing: Bool
+    var size: CGFloat = 12
+    @Environment(\.accessibilityReduceMotion) private var still
+
+    var body: some View {
+        let dot = Circle().fill(.record).frame(width: size, height: size).accessibilityHidden(true)
+        if pulsing && !still {
+            dot.phaseAnimator([1.0, 0.35]) { view, opacity in view.opacity(opacity) } animation: { _ in .easeInOut(duration: 0.8) }
+        } else {
+            dot
+        }
+    }
+}
+
+// MARK: - Couldn't record
+
+/// The recorder couldn't start: the foundation's empty state in its words, and what to do. The microphone refused,
+/// Open Settings goes straight to where it's turned on.
+private struct CantRecord: View {
+    var words: String
+    var retry: () -> Void
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        let microphone = words.localizedCaseInsensitiveContains("microphone")
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Can't record").textStyle(.h2).foregroundStyle(.ink)
+            EmptyText(words)
+            HStack(spacing: 10) {
+                if microphone {
+                    Button("Open Settings") {
+                        if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+                    }
+                    .buttonStyle(.pill(small: true, ink: true))
+                }
+                Button("Try again", action: retry).buttonStyle(.pill(small: true))
+            }
+            .padding(.top, 8)
+        }
+        .padding(.horizontal, Space.pageCompact)
+        .padding(.vertical, 24)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+// MARK: - What's been said
+
+/// What's been heard so far, as the desktop's transcript has it: each line's time down the side, small and subtle,
+/// then the words, in ink once they've settled and subtle until then. Newest at the bottom, kept in view.
 private struct LiveTranscript: View {
     var recorder: Recorder
+    var inset: CGFloat = Space.pageCompact
 
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 14) {
+                LazyVStack(alignment: .leading, spacing: 10) {
                     let segments = recorder.recording?.segments ?? []
                     if segments.isEmpty && recorder.volatile.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
-                            Image(systemName: "waveform").font(.title).foregroundStyle(.tint).symbolEffect(.variableColor.iterative)
-                            Text("Listening…").font(.headline)
-                            Text("What's said is written down here, on this phone, as it's said. Lock the phone if you like: it keeps going.")
-                                .font(.callout).foregroundStyle(.secondary)
+                            Text("What's said shows here a few seconds after it's said.")
+                            Text("It's written down on this phone. Lock the phone if you like: it keeps recording.")
                         }
-                        .padding(.top, 30)
+                        .textStyle(.summary)
+                        .foregroundStyle(.inkMuted)
                     }
                     ForEach(Array(segments.enumerated()), id: \.offset) { _, s in
-                        HStack(alignment: .firstTextBaseline, spacing: 12) {
-                            Text(Format.clock(s.start)).font(.caption.monospacedDigit().weight(.medium)).foregroundStyle(.tint)
-                                .frame(width: 44, alignment: .trailing)
-                            Text(s.text).font(.body).textSelection(.enabled)
-                        }
+                        TranscriptLine(time: Format.clock(s.start), text: s.text)
                     }
                     if !recorder.volatile.isEmpty {
-                        HStack(alignment: .firstTextBaseline, spacing: 12) {
-                            Text(Format.clock(recorder.elapsed)).font(.caption.monospacedDigit()).foregroundStyle(.tertiary)
-                                .frame(width: 44, alignment: .trailing)
-                            Text(recorder.volatile).font(.body).foregroundStyle(.secondary)
-                        }
+                        TranscriptLine(time: Format.clock(recorder.elapsed), text: recorder.volatile, settled: false)
                     }
                     Color.clear.frame(height: 1).id("end")
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 20)
+                .padding(.horizontal, inset)
+                .padding(.top, 18)
+                .padding(.bottom, 24)
             }
             .onChange(of: recorder.volatile) { _, _ in proxy.scrollTo("end", anchor: .bottom) }
             .onChange(of: recorder.recording?.segments.count) { _, _ in withAnimation { proxy.scrollTo("end", anchor: .bottom) } }
@@ -249,84 +401,311 @@ private struct LiveTranscript: View {
     }
 }
 
-/// The last few seconds' loudness, as bars.
-struct Waveform: View {
-    var levels: [Float]
-    var active: Bool
+/// A line of a transcript: its time (12, medium, subtle, down the side) and its words (16 on 26).
+private struct TranscriptLine: View {
+    var time: String
+    var text: String
+    var settled = true
 
     var body: some View {
-        GeometryReader { geo in
-            HStack(alignment: .center, spacing: 2) {
-                ForEach(Array(levels.enumerated()), id: \.offset) { _, l in
-                    Capsule()
-                        .fill(active ? Color.red.opacity(0.75) : Color.secondary.opacity(0.4))
-                        .frame(height: max(3, CGFloat(l) * geo.size.height))
-                }
-            }
-            .frame(maxHeight: .infinity)
-            .animation(.linear(duration: 0.1), value: levels)
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(time).font(.atkinson(12, .medium, relativeTo: .caption)).foregroundStyle(.inkSubtle)
+                .frame(width: 44, alignment: .leading)
+            Text(text).font(.atkinson(16, relativeTo: .body)).lineSpacing(6)
+                .foregroundStyle(settled ? Color.ink : .inkSubtle)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }
 
-/// Which class it's for: the classes as chips in a menu, or none (the library sorts it).
+// MARK: - Which class
+
+/// Which class it's for, as the desktop's breadcrumb names it: the swatch and the name in bold ink (or the inbox and
+/// Unsorted), then a chevron. Tapped, the desktop's folder picker opens beside it, as a popover (never a sheet over a
+/// sheet). Wherever something new is filed: a recording, an imported one, files, a GoodNotes notebook.
 struct ClassPicker: View {
     @Environment(AppModel.self) private var app
     @Binding var selection: String?
+    @State private var picking = false
 
     var body: some View {
-        Menu {
-            Button { selection = nil } label: { Label("Let Study Stash sort it", systemImage: "wand.and.stars") }
-            Divider()
-            ForEach(app.classes) { c in
-                Button { selection = c.name } label: {
-                    if selection == c.name { Label(c.name, systemImage: "checkmark") } else { Text(c.name) }
+        let unsorted = Self.isUnsorted(selection)
+        Button { picking = true } label: {
+            HStack(spacing: 8) {
+                if unsorted {
+                    Icon("inbox", size: 15, relativeTo: .subheadline).foregroundStyle(.inkSubtle)
+                    Text("Unsorted").font(.atkinson(14, .bold, relativeTo: .subheadline)).foregroundStyle(.inkMuted)
+                } else {
+                    Swatch(app.hue(of: selection))
+                    Text(selection ?? "").font(.atkinson(14, .bold, relativeTo: .subheadline)).foregroundStyle(.ink).lineLimit(1)
+                }
+                Icon("expand_more", size: 14, relativeTo: .subheadline).foregroundStyle(.inkSubtle)
+            }
+            .padding(.vertical, 8)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(unsorted ? "Unsorted. Choose a \(app.words.cls)" : "In \(selection ?? ""). Change \(app.words.cls)")
+        .popover(isPresented: $picking, attachmentAnchor: .rect(.bounds), arrowEdge: .top) {
+            ClassPickerMenu(selection: $selection) { picking = false }
+                .presentationCompactAdaptation(.popover)
+        }
+        .task {
+            #if DEBUG
+            if DebugLaunch.flag("-pick-class") {
+                try? await Task.sleep(for: .seconds(2))
+                picking = true
+            }
+            #endif
+        }
+    }
+
+    static func isUnsorted(_ cls: String?) -> Bool { cls == nil || cls == "Unsorted" || cls?.isEmpty == true }
+}
+
+/// The desktop's folder picker: a field that narrows the list as it's typed in, Unsorted, then each class under its
+/// group's name (Classes, Clubs, Work) with its swatch and how many it holds, a check on the one chosen. A pick
+/// closes it.
+private struct ClassPickerMenu: View {
+    @Environment(AppModel.self) private var app
+    @Binding var selection: String?
+    var close: () -> Void
+    @State private var query = ""
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                Icon("search", size: 16).foregroundStyle(.inkSubtle)
+                TextField("", text: $query, prompt: Text("Find a \(app.words.cls)").foregroundStyle(.inkSubtle))
+                    .textStyle(.body)
+                    .foregroundStyle(.ink)
+                    .autocorrectionDisabled()
+                    .submitLabel(.done)
+                    .onSubmit { if let first = found.first?.classes.first { pick(first.name) } }
+            }
+            .padding(.horizontal, 16)
+            .frame(minHeight: 46)
+            Rule()
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    if showsUnsorted { row(name: nil, count: 0) }
+                    ForEach(found, id: \.group) { g in
+                        GroupLabel(g.group).padding(.top, 12).padding(.bottom, 2)
+                        ForEach(g.classes) { c in row(name: c.name, count: c.lectures) }
+                    }
+                    if found.isEmpty && !showsUnsorted {
+                        Text("No \(app.words.cls) is called that.").textStyle(.summary).foregroundStyle(.inkMuted).padding(.vertical, 12)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 6)
+            }
+        }
+        .frame(width: 320)
+        .frame(maxHeight: 440)
+        .fixedSize(horizontal: false, vertical: true)
+        .foregroundStyle(.ink)
+        .presentationBackground(.surface)
+    }
+
+    private var showsUnsorted: Bool {
+        let q = query.trimmingCharacters(in: .whitespaces)
+        return q.isEmpty || "unsorted".localizedCaseInsensitiveContains(q)
+    }
+
+    /// The classes that match what's typed, under their groups: Classes first, then the rest as the library has them.
+    private var found: [(group: String, classes: [ClassInfo])] {
+        let q = query.trimmingCharacters(in: .whitespaces)
+        let matching = app.classes.filter { q.isEmpty || $0.name.localizedCaseInsensitiveContains(q) || ($0.code ?? "").localizedCaseInsensitiveContains(q) }
+        var groups: [(group: String, classes: [ClassInfo])] = []
+        for c in matching {
+            let g = (c.group ?? "").isEmpty ? app.words.classes : c.group!
+            if let i = groups.firstIndex(where: { $0.group == g }) { groups[i].classes.append(c) } else { groups.append((g, [c])) }
+        }
+        let first = groups.filter { $0.group == app.words.classes }
+        return first + groups.filter { $0.group != app.words.classes }
+    }
+
+    private func row(name: String?, count: Int) -> some View {
+        let chosen = name == nil ? ClassPicker.isUnsorted(selection) : name == selection
+        let shown = name ?? "Unsorted"
+        return Button { pick(name) } label: {
+            HStack(spacing: 12) {
+                if let name {
+                    Swatch(app.hue(of: name)).frame(width: 16)
+                    Text(name).textStyle(.className).fontWeight(chosen ? .bold : .regular).foregroundStyle(.ink).lineLimit(1)
+                } else {
+                    Icon("inbox", size: 16).foregroundStyle(.inkSubtle).frame(width: 16)
+                    Text("Unsorted").textStyle(.className).fontWeight(chosen ? .bold : .regular).foregroundStyle(.ink)
+                }
+                Spacer(minLength: 8)
+                if chosen {
+                    Icon("check", size: 15).foregroundStyle(.ink)
+                } else if count > 0 {
+                    Text("\(count)").textStyle(.meta).foregroundStyle(.inkSubtle)
                 }
             }
-        } label: {
-            HStack(spacing: 6) {
-                Swatch(app.hue(of: selection))
-                Text(selection ?? app.words.anyClass).font(.subheadline.weight(.semibold))
-                Image(systemName: "chevron.up.chevron.down").font(.caption2.weight(.bold))
-            }
-            .foregroundStyle(selection.map { app.color(of: $0) } ?? .secondary)
-            .padding(.horizontal, 10).padding(.vertical, 5)
-            .background((selection.map { app.color(of: $0) } ?? .secondary).opacity(0.12), in: .capsule)
+            .frame(minHeight: 40)
+            .contentShape(.rect)
         }
+        .buttonStyle(.row)
+        .accessibilityLabel(chosen ? "\(shown), chosen" : count > 0 ? "\(shown), \(count) \(count == 1 ? app.words.lecture : app.words.lectures)" : shown)
+        .accessibilityAddTraits(chosen ? .isSelected : [])
+    }
+
+    private func pick(_ name: String?) {
+        selection = name
+        close()
     }
 }
 
-/// After Stop: sent (its notes are being written), or kept here to send when the library can be reached.
-private struct SentView: View {
+// MARK: - A recording on this phone
+
+/// A recording that hasn't reached the library (`Route.recording(id)`, from Home's On this phone, or after a Stop
+/// that couldn't send): its class (still the picker), when, its title, where it's got to ("Waiting to reach your
+/// library", or the library's own words), then what was typed and what was said. Send now, Share the audio, Delete.
+/// Once it sends, the lecture takes its place.
+struct PhoneRecordingView: View {
     @Environment(AppModel.self) private var app
-    var recording: Recording
-    var done: () -> Void
+    @Environment(\.dismiss) private var dismiss
+    let id: String
+    @State private var store = RecordingStore.shared
+    @State private var sending = false
+    @State private var confirmingDelete = false
+
+    private var recording: Recording? { store.recordings.first { $0.id == id } }
 
     var body: some View {
-        let ok = recording.state == .sent
-        VStack(spacing: 18) {
-            Spacer()
-            Image(systemName: ok ? "checkmark.circle.fill" : "tray.and.arrow.up.fill")
-                .font(.system(size: 56))
-                .foregroundStyle(ok ? Color.green.gradient : Color.orange.gradient)
-                .symbolEffect(.bounce, value: ok)
-            Text(ok ? "Sent to \(app.libraryName)" : "Saved on this phone").font(.app(.docTitle))
-            Text(ok ? "Notes are being written now. They'll be in your library in a minute or two."
-                 : (recording.error ?? "It's sent as soon as your library can be reached."))
-                .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
-            Text("\(recording.displayTitle) · \(Format.duration(recording.seconds))")
-                .font(.footnote).foregroundStyle(.tertiary)
-            Spacer()
-            Button(action: done) { Text("Done").frame(maxWidth: .infinity).padding(.vertical, 6) }
-                .buttonStyle(.glassProminent)
-                .controlSize(.large)
+        Group {
+            if let r = recording {
+                page(r)
+            } else {
+                EmptyState(title: "This recording isn't on this phone any more",
+                           detail: "It was sent to your library or deleted. Anything that reached your library is on Home.")
+                    .padding(.horizontal, Space.pageCompact)
+            }
         }
-        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .page()
+        .foregroundStyle(.ink)
+        .navigationBarTitleDisplayMode(.inline)
+        .confirmationDialog("Delete this recording?", isPresented: $confirmingDelete, titleVisibility: .visible) {
+            Button("Delete", role: .destructive) {
+                if let r = recording { store.delete(r) }
+                dismiss()
+            }
+        } message: {
+            Text("It hasn't reached your library. What was said, what you typed and its audio are deleted from this phone.")
+        }
+    }
+
+    private func page(_ r: Recording) -> some View {
+        let date = Recording.localISO(r.started)
+        let crumb = Nouns.capital(app.noun(of: r.className)) + ", " + Format.noteWhen(date, r.seconds)
+        let sent = r.state == .sent
+        let notes = r.notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        return ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                ClassPicker(selection: Binding(get: { recording?.className }, set: { c in
+                    guard var now = recording else { return }
+                    now.className = c
+                    store.save(now)
+                }))
+                .disabled(sent)
+                Text(crumb).textStyle(.crumb).foregroundStyle(.inkMuted)
+                Text(r.displayTitle).textStyle(.docTitle).foregroundStyle(.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 10)
+                    .accessibilityAddTraits(.isHeader)
+
+                Text(status(r)).textStyle(.lede).foregroundStyle(r.state == .failed ? Color.ink : .inkMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 10)
+
+                FlowLayout(spacing: 10) {
+                    if sent {
+                        Button { app.go(.lecture(id), root: true) } label: { Text("Open it") }
+                            .buttonStyle(.pill(ink: true))
+                    } else {
+                        Button { Task { await send() } } label: {
+                            HStack(spacing: 8) {
+                                if sending { ProgressView().controlSize(.mini).tint(.surface) }
+                                Text(sending ? "Sending…" : "Send now")
+                            }
+                        }
+                        .buttonStyle(.pill(ink: true))
+                        .disabled(sending || app.api == nil)
+                    }
+                    if let audio = store.audioURL(r), FileManager.default.fileExists(atPath: audio.path) {
+                        ShareLink(item: audio) { Label("Share the audio", icon: "ios_share") }
+                            .buttonStyle(.pill)
+                    }
+                    if !sent {
+                        Button { confirmingDelete = true } label: { Label("Delete", icon: "delete") }
+                            .buttonStyle(.pill)
+                            .disabled(sending)
+                    }
+                }
+                .padding(.top, 20)
+
+                if !notes.isEmpty {
+                    HStack(spacing: 6) {
+                        RoundedRectangle(cornerRadius: 2).fill(.ink).frame(width: 14, height: 3)
+                        Text("What you wrote").textStyle(.legend).fontWeight(.bold).foregroundStyle(.ink)
+                    }
+                    .padding(.top, 32)
+                    Text(notes).font(.atkinson(16, .semibold, relativeTo: .body)).lineSpacing(6).foregroundStyle(.ink)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 8)
+                }
+
+                SectionHeading(title: "Transcript").padding(.top, 28)
+                if r.segments.isEmpty {
+                    EmptyText("Nothing was heard in this \(app.noun(of: r.className)).").padding(.top, 8)
+                } else {
+                    LazyVStack(alignment: .leading, spacing: 10) {
+                        ForEach(Array(r.segments.enumerated()), id: \.offset) { _, s in
+                            TranscriptLine(time: Format.clock(s.start), text: s.text)
+                        }
+                    }
+                    .padding(.top, 12)
+                }
+            }
+            .padding(.horizontal, Space.pageCompact)
+            .padding(.top, 8)
+            .padding(.bottom, 32)
+            .frame(maxWidth: 760, alignment: .leading)
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    /// Where it's got to, in plain words.
+    private func status(_ r: Recording) -> String {
+        switch r.state {
+        case .sent: "It's in your library now."
+        case .sending: "Sending it to your library…"
+        case .failed: r.error ?? "Your library couldn't take it."
+        default: r.error ?? (app.offline || app.api == nil ? "Waiting to reach your library. It's sent on its own once your phone can reach your computer."
+                                                             : "Waiting to reach your library.")
+        }
+    }
+
+    private func send() async {
+        guard let api = app.api else { return }
+        sending = true
+        await store.send(id, api: api)
+        sending = false
+        if recording?.state == .sent { app.go(.lecture(id), root: true) }
     }
 }
 
-/// Above the tab bar: Record (for the class on the calendar now), or, while recording, the time and how loud, a
-/// tap from the recording.
+// MARK: - Record, above the tab bar
+
+/// Above the tab bar, on every tab, the one Record: the desktop's record dot (red, a white dot in it) and "Record",
+/// then the class it'll go into (this page's, else the one on the calendar now), or just "Record" (a recording in
+/// Unsorted). While it records: the dot breathing, the title, the level and the time; a tap opens it.
 struct RecordAccessory: View {
     @Environment(AppModel.self) private var app
     @Environment(\.tabViewBottomAccessoryPlacement) private var placement
@@ -334,28 +713,64 @@ struct RecordAccessory: View {
     var classNow: String?
 
     var body: some View {
+        let active = recorder.isActive
+        let into = app.recordHere ?? classNow
+        let inline = placement == .inline
         Button {
-            app.record(for: recorder.isActive ? recorder.recording?.className : classNow)
+            app.record(for: active ? recorder.recording?.className : into)
         } label: {
             HStack(spacing: 10) {
-                if recorder.isActive {
-                    Circle().fill(.red).frame(width: 9, height: 9)
-                        .symbolEffect(.pulse, isActive: recorder.phase == .recording)
-                    Text(Format.clock(recorder.elapsed)).font(.subheadline.monospacedDigit().weight(.semibold))
-                    if placement != .inline {
-                        Text(recorder.recording?.displayTitle ?? "Recording").font(.subheadline).lineLimit(1).foregroundStyle(.secondary)
+                if active {
+                    PulseDot(pulsing: recorder.phase == .recording)
+                        .frame(width: 32, height: 32)
+                    if !inline {
+                        Text(recorder.recording?.displayTitle ?? "Recording").textStyle(.button).foregroundStyle(.ink).lineLimit(1)
                         Spacer(minLength: 4)
-                        Waveform(levels: Array(recorder.levels.suffix(16)), active: recorder.phase == .recording).frame(width: 52, height: 16)
                     }
+                    if recorder.phase == .recording {
+                        LevelBars(levels: recorder.levels)
+                    } else if recorder.phase == .paused, !inline {
+                        Text("Paused").textStyle(.buttonSmall).foregroundStyle(.inkMuted)
+                    }
+                    Text(Format.clock(recorder.elapsed)).textStyle(.button).fontWeight(.medium).foregroundStyle(.inkMuted).fixedSize()
                 } else {
-                    Image(systemName: "mic.fill").foregroundStyle(.red)
-                    Text(classNow.map { "Record \($0)" } ?? app.words.record).font(.subheadline.weight(.semibold)).lineLimit(1)
-                    if placement != .inline { Spacer(minLength: 0) }
+                    RecordDot(state: .idle, mini: true)
+                    Text("Record").textStyle(.button).foregroundStyle(.ink)
+                    if let into, !inline { Highlight(into, hue: app.hue(of: into)).lineLimit(1) }
+                    if !inline { Spacer(minLength: 0) }
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.leading, 6)
+            .padding(.trailing, 16)
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(active ? "\(recorder.phase == .paused ? "Paused" : "Recording"), \(recorder.recording?.displayTitle ?? ""), \(Format.clock(recorder.elapsed))"
+                            : into.map { "Record \($0)" } ?? "Record")
+        .accessibilityHint(active ? "Opens the recording" : "")
+    }
+}
+
+// MARK: - Stand-ins until the foundation's flows are merged
+
+// FLOWS: the foundation lane is adding these to AppModel (shared changes 3, 4 and 5). Each stand-in below does the
+// nearest thing today's AppModel can; when iphone-look is merged they collide with the real ones, and are deleted.
+extension AppModel {
+    /// FLOWS: stand-in for `recordHere` (the class of the page that's showing, set by `.recordsInto(cls)`).
+    var recordHere: String? { nil }
+
+    /// FLOWS: stand-in for `go(_:tab:root:)`.
+    func go(_ route: Route, root: Bool = false) {
+        incoming = nil
+        showingRecorder = false
+        pendingRoute = route
+    }
+
+    /// FLOWS: stand-in for `recordingFinished(id:sent:)`: close the recorder, then the lecture (or, not sent, the
+    /// recording on this phone; that route comes with the merge, so for now Home, where On this phone lists it).
+    func recordingFinished(id: String, sent: Bool) {
+        incoming = nil
+        showingRecorder = false
+        if sent { pendingRoute = .lecture(id) }
     }
 }
