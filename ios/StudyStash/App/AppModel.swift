@@ -1,4 +1,5 @@
 import Foundation
+import WidgetKit
 import Observation
 import SwiftUI
 
@@ -49,6 +50,7 @@ final class AppModel {
         if let d { ResponseCache.shared.write("due", d) }
         if let u { ResponseCache.shared.write("upcoming", u) }
         await Reminders.schedule(upcoming: u, due: d) { [weak self] e in self?.className(ofEvent: e) }
+        writeGlance(upcoming: u, due: d)
         await RecordingStore.shared.sendWaiting(api: api)
         await Reminders.checkNotes(api: api)
         if let all = try? await api.lectures(limit: 500) { SpotlightIndex.index(all) }
@@ -135,6 +137,24 @@ final class AppModel {
         libraryName = overview.name
         uses = overview.uses
         if let s = overview.forSchool { forSchool = s }
+    }
+
+    /// What the widgets show: the next classes and what's due next, with their colours.
+    func writeGlance(upcoming: Upcoming?, due: DueList?) {
+        let now = Date.now
+        let events = (upcoming?.events ?? []).compactMap { e -> Glance.Event? in
+            guard !e.allDay, let s = Format.parse(e.start), let end = Format.parse(e.end), end > now else { return nil }
+            let cls = className(ofEvent: e)
+            return Glance.Event(title: e.title, className: cls, start: s, end: end, location: e.location, color: cls.map { color(of: $0).hexString })
+        }
+        let open = (due?.groups ?? []).filter { ["overdue", "week", "later"].contains($0.key) }
+            .flatMap { g in g.items.map { (item: $0, overdue: g.key == "overdue") } }
+        let dueItems = open.compactMap { x -> Glance.Due? in
+            guard let at = Format.parse(x.item.due) else { return nil }
+            return Glance.Due(name: x.item.name, className: x.item.class, due: at, overdue: x.overdue, color: color(of: x.item.class).hexString)
+        }
+        Glance(library: libraryName, events: Array(events.prefix(6)), due: Array(dueItems.prefix(6)), toHandIn: due?.toHandIn ?? 0, updated: now).save()
+        WidgetCenter.shared.reloadAllTimelines()
     }
 
     /// What the library is for (nil: it's from before it was asked; empty: not asked yet).

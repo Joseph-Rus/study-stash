@@ -6,6 +6,7 @@ import WidgetKit
 @main
 struct StudyStashWidgets: WidgetBundle {
     var body: some Widget {
+        UpNextWidget()
         RecordingLiveActivity()
         RecordControl()
     }

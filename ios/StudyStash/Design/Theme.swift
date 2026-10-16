@@ -123,3 +123,12 @@ extension ShapeStyle where Self == Color {
             : UIColor(red: 1, green: 1, blue: 0.998, alpha: 1) })
     }
 }
+
+extension Color {
+    /// "#rrggbb", for what the widgets read.
+    var hexString: String {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        UIColor(self).resolvedColor(with: UITraitCollection(userInterfaceStyle: .light)).getRed(&r, green: &g, blue: &b, alpha: &a)
+        return String(format: "#%02x%02x%02x", Int(r * 255), Int(g * 255), Int(b * 255))
+    }
+}
