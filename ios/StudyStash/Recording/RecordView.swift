@@ -610,29 +610,3 @@ struct RecordAccessory: View {
         .accessibilityHint(active ? "Opens the recording" : "")
     }
 }
-
-// MARK: - Stand-ins until iphone-look is merged
-
-// FLOWS: AppModel on iphone-look has these (shared changes 3, 4 and 5); this branch can't merge it yet. Each stand-in
-// does the nearest thing today's AppModel can, and each is declared so that it collides with the real one (the same
-// name, or a type that's gone there): after the merge this block doesn't compile, and is deleted.
-extension AppModel {
-    /// FLOWS: stand-in for `recordTitle` (the title Record starts with: an event's, "Calculus II, Fri 16 Oct").
-    var recordTitle: String { "" }
-
-    /// FLOWS: stand-in for `recordClass` (where Record records: the page's class, else the one on now).
-    var recordClass: String? { classNow(ResponseCache.shared.read("upcoming", as: Upcoming.self)) }
-
-    /// FLOWS: stand-in for `go(_:tab:root:)`.
-    func go(_ route: Route?, tab: MainTabs.TabID = .library, root: Bool = false) {
-        incoming = nil
-        showingRecorder = false
-        pendingRoute = route
-    }
-
-    /// FLOWS: stand-in for `recordingFinished(id:sent:)`: the recorder closes, then the lecture (not sent: the
-    /// recording on this phone, whose route comes with the merge; until then, Home, where On this phone lists it).
-    func recordingFinished(id: String, sent: Bool) {
-        go(sent ? .lecture(id) : nil)
-    }
-}
