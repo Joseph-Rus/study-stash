@@ -53,7 +53,7 @@ struct ImportAudioView: View {
         .onAppear {
             // Opened with no class: the one on the calendar now, as Record has it.
             if className == nil {
-                className = app.recordHere ?? app.classNow(ResponseCache.shared.read("upcoming", as: Upcoming.self))
+                className = app.recordClass
             }
         }
     }

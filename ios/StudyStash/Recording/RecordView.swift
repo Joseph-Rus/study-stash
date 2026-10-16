@@ -12,8 +12,6 @@ struct RecordView: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var recorder = Recorder.shared
     var startClass: String?
-    /// The title it starts with: the calendar event's, or the page's it was started on ("Calculus II, Fri 16 Oct").
-    var startTitle: String = ""
 
     enum Pane: Hashable { case notes, transcript }
     @State private var pane: Pane = DebugLaunch.value("-pane") == "transcript" ? .transcript : .notes
@@ -46,7 +44,8 @@ struct RecordView: View {
         .interactiveDismissDisabled(recorder.phase == .finishing)
         .task {
             if recorder.phase == .idle || isFailed {
-                await recorder.start(className: startClass, title: startTitle)
+                // An event's title is a working one ("Calculus II, Fri 16 Oct"): the library still names it.
+                await recorder.start(className: startClass, title: app.recordTitle)
             }
             #if DEBUG
             // Pictures: `-pause-after <s>` pauses, `-stop-after <s>` stops (`-keep-on-phone` as if it couldn't be
@@ -120,7 +119,7 @@ struct RecordView: View {
             .padding(.horizontal, Space.pageCompact)
             .padding(.top, 24)
         case .failed(let words):
-            CantRecord(words: words) { Task { await recorder.start(className: startClass, title: startTitle) } }
+            CantRecord(words: words) { Task { await recorder.start(className: startClass, title: app.recordTitle) } }
         case .idle where recorder.recording == nil:
             // For a moment before it starts.
             ProgressView().tint(.inkSubtle).padding(.horizontal, Space.pageCompact).padding(.top, 24)
@@ -402,7 +401,7 @@ private struct LiveTranscript: View {
 }
 
 /// A line of a transcript: its time (12, medium, subtle, down the side) and its words (16 on 26).
-private struct TranscriptLine: View {
+struct TranscriptLine: View {
     var time: String
     var text: String
     var settled = true
@@ -560,161 +559,22 @@ private struct ClassPickerMenu: View {
     }
 }
 
-// MARK: - A recording on this phone
-
-/// A recording that hasn't reached the library (`Route.recording(id)`, from Home's On this phone, or after a Stop
-/// that couldn't send): its class (still the picker), when, its title, where it's got to ("Waiting to reach your
-/// library", or the library's own words), then what was typed and what was said. Send now, Share the audio, Delete.
-/// Once it sends, the lecture takes its place.
-struct PhoneRecordingView: View {
-    @Environment(AppModel.self) private var app
-    @Environment(\.dismiss) private var dismiss
-    let id: String
-    @State private var store = RecordingStore.shared
-    @State private var sending = false
-    @State private var confirmingDelete = false
-
-    private var recording: Recording? { store.recordings.first { $0.id == id } }
-
-    var body: some View {
-        Group {
-            if let r = recording {
-                page(r)
-            } else {
-                EmptyState(title: "This recording isn't on this phone any more",
-                           detail: "It was sent to your library or deleted. Anything that reached your library is on Home.")
-                    .padding(.horizontal, Space.pageCompact)
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .page()
-        .foregroundStyle(.ink)
-        .navigationBarTitleDisplayMode(.inline)
-        .confirmationDialog("Delete this recording?", isPresented: $confirmingDelete, titleVisibility: .visible) {
-            Button("Delete", role: .destructive) {
-                if let r = recording { store.delete(r) }
-                dismiss()
-            }
-        } message: {
-            Text("It hasn't reached your library. What was said, what you typed and its audio are deleted from this phone.")
-        }
-    }
-
-    private func page(_ r: Recording) -> some View {
-        let date = Recording.localISO(r.started)
-        let crumb = Nouns.capital(app.noun(of: r.className)) + ", " + Format.noteWhen(date, r.seconds)
-        let sent = r.state == .sent
-        let notes = r.notes.trimmingCharacters(in: .whitespacesAndNewlines)
-        return ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                ClassPicker(selection: Binding(get: { recording?.className }, set: { c in
-                    guard var now = recording else { return }
-                    now.className = c
-                    store.save(now)
-                }))
-                .disabled(sent)
-                Text(crumb).textStyle(.crumb).foregroundStyle(.inkMuted)
-                Text(r.displayTitle).textStyle(.docTitle).foregroundStyle(.ink)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 10)
-                    .accessibilityAddTraits(.isHeader)
-
-                Text(status(r)).textStyle(.lede).foregroundStyle(r.state == .failed ? Color.ink : .inkMuted)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 10)
-
-                FlowLayout(spacing: 10) {
-                    if sent {
-                        Button { app.go(.lecture(id), root: true) } label: { Text("Open it") }
-                            .buttonStyle(.pill(ink: true))
-                    } else {
-                        Button { Task { await send() } } label: {
-                            HStack(spacing: 8) {
-                                if sending { ProgressView().controlSize(.mini).tint(.surface) }
-                                Text(sending ? "Sending…" : "Send now")
-                            }
-                        }
-                        .buttonStyle(.pill(ink: true))
-                        .disabled(sending || app.api == nil)
-                    }
-                    if let audio = store.audioURL(r), FileManager.default.fileExists(atPath: audio.path) {
-                        ShareLink(item: audio) { Label("Share the audio", icon: "ios_share") }
-                            .buttonStyle(.pill)
-                    }
-                    if !sent {
-                        Button { confirmingDelete = true } label: { Label("Delete", icon: "delete") }
-                            .buttonStyle(.pill)
-                            .disabled(sending)
-                    }
-                }
-                .padding(.top, 20)
-
-                if !notes.isEmpty {
-                    HStack(spacing: 6) {
-                        RoundedRectangle(cornerRadius: 2).fill(.ink).frame(width: 14, height: 3)
-                        Text("What you wrote").textStyle(.legend).fontWeight(.bold).foregroundStyle(.ink)
-                    }
-                    .padding(.top, 32)
-                    Text(notes).font(.atkinson(16, .semibold, relativeTo: .body)).lineSpacing(6).foregroundStyle(.ink)
-                        .textSelection(.enabled)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.top, 8)
-                }
-
-                SectionHeading(title: "Transcript").padding(.top, 28)
-                if r.segments.isEmpty {
-                    EmptyText("Nothing was heard in this \(app.noun(of: r.className)).").padding(.top, 8)
-                } else {
-                    LazyVStack(alignment: .leading, spacing: 10) {
-                        ForEach(Array(r.segments.enumerated()), id: \.offset) { _, s in
-                            TranscriptLine(time: Format.clock(s.start), text: s.text)
-                        }
-                    }
-                    .padding(.top, 12)
-                }
-            }
-            .padding(.horizontal, Space.pageCompact)
-            .padding(.top, 8)
-            .padding(.bottom, 32)
-            .frame(maxWidth: 760, alignment: .leading)
-            .frame(maxWidth: .infinity)
-        }
-    }
-
-    /// Where it's got to, in plain words.
-    private func status(_ r: Recording) -> String {
-        switch r.state {
-        case .sent: "It's in your library now."
-        case .sending: "Sending it to your library…"
-        case .failed: r.error ?? "Your library couldn't take it."
-        default: r.error ?? (app.offline || app.api == nil ? "Waiting to reach your library. It's sent on its own once your phone can reach your computer."
-                                                             : "Waiting to reach your library.")
-        }
-    }
-
-    private func send() async {
-        guard let api = app.api else { return }
-        sending = true
-        await store.send(id, api: api)
-        sending = false
-        if recording?.state == .sent { app.go(.lecture(id), root: true) }
-    }
-}
-
 // MARK: - Record, above the tab bar
 
 /// Above the tab bar, on every tab, the one Record: the desktop's record dot (red, a white dot in it) and "Record",
-/// then the class it'll go into (this page's, else the one on the calendar now), or just "Record" (a recording in
-/// Unsorted). While it records: the dot breathing, the title, the level and the time; a tap opens it.
+/// then the class it'll go into (`classNow`, the app's `recordClass`: this page's, else the one on the calendar now)
+/// in its highlighter, or just "Record" (a recording in Unsorted). While it records: the dot breathing, the title,
+/// the level and the time; a tap opens it.
 struct RecordAccessory: View {
     @Environment(AppModel.self) private var app
     @Environment(\.tabViewBottomAccessoryPlacement) private var placement
     @State private var recorder = Recorder.shared
+    /// Where Record records (`app.recordClass`).
     var classNow: String?
 
     var body: some View {
         let active = recorder.isActive
-        let into = app.recordHere ?? classNow
+        let into = classNow
         let inline = placement == .inline
         Button {
             app.record(for: active ? recorder.recording?.className : into)
@@ -751,26 +611,28 @@ struct RecordAccessory: View {
     }
 }
 
-// MARK: - Stand-ins until the foundation's flows are merged
+// MARK: - Stand-ins until iphone-look is merged
 
-// FLOWS: the foundation lane is adding these to AppModel (shared changes 3, 4 and 5). Each stand-in below does the
-// nearest thing today's AppModel can; when iphone-look is merged they collide with the real ones, and are deleted.
+// FLOWS: AppModel on iphone-look has these (shared changes 3, 4 and 5); this branch can't merge it yet. Each stand-in
+// does the nearest thing today's AppModel can, and each is declared so that it collides with the real one (the same
+// name, or a type that's gone there): after the merge this block doesn't compile, and is deleted.
 extension AppModel {
-    /// FLOWS: stand-in for `recordHere` (the class of the page that's showing, set by `.recordsInto(cls)`).
-    var recordHere: String? { nil }
+    /// FLOWS: stand-in for `recordTitle` (the title Record starts with: an event's, "Calculus II, Fri 16 Oct").
+    var recordTitle: String { "" }
+
+    /// FLOWS: stand-in for `recordClass` (where Record records: the page's class, else the one on now).
+    var recordClass: String? { classNow(ResponseCache.shared.read("upcoming", as: Upcoming.self)) }
 
     /// FLOWS: stand-in for `go(_:tab:root:)`.
-    func go(_ route: Route, root: Bool = false) {
+    func go(_ route: Route?, tab: MainTabs.TabID = .library, root: Bool = false) {
         incoming = nil
         showingRecorder = false
         pendingRoute = route
     }
 
-    /// FLOWS: stand-in for `recordingFinished(id:sent:)`: close the recorder, then the lecture (or, not sent, the
-    /// recording on this phone; that route comes with the merge, so for now Home, where On this phone lists it).
+    /// FLOWS: stand-in for `recordingFinished(id:sent:)`: the recorder closes, then the lecture (not sent: the
+    /// recording on this phone, whose route comes with the merge; until then, Home, where On this phone lists it).
     func recordingFinished(id: String, sent: Bool) {
-        incoming = nil
-        showingRecorder = false
-        if sent { pendingRoute = .lecture(id) }
+        go(sent ? .lecture(id) : nil)
     }
 }
