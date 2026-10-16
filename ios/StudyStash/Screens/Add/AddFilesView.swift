@@ -54,6 +54,11 @@ struct AddFilesView: View {
     private enum Step: Hashable { case place, goodnotes }
 
     init(className: String? = nil, lecture: (id: String, title: String)? = nil, files: [PendingFile] = []) {
+        var className = className, files = files
+        #if DEBUG
+        // Pictures: `-attach-home` opens it as Home's + does (no class given, nothing picked yet).
+        if DebugLaunch.flag("-attach-home") { className = nil; files = [] }
+        #endif
         _className = State(initialValue: className)
         self.lecture = lecture
         _files = State(initialValue: files)
@@ -66,7 +71,7 @@ struct AddFilesView: View {
             HandwritingView(className: className, lecture: lecture)
                 .interactiveDismissDisabled()
         case .recording:
-            // FLOWS: the recording lane's Import a recording, for this class.
+            // The recording lane's Import a recording, for this class; after Import it opens the lecture.
             ImportAudioView(file: nil, className: className)
         case .goodnotes(let url):
             GoodNotesImportView(url: url, className: className, lecture: lecture)
@@ -129,9 +134,15 @@ struct AddFilesView: View {
         }
         .task {
             // From Home: the class on the calendar now, if there is one.
-            if picksPlace, className == nil {
-                className = app.classNow(ResponseCache.shared.read("upcoming", as: Upcoming.self))
+            if picksPlace, className == nil { className = app.classNow(app.upcoming) }
+            #if DEBUG
+            // Pictures: `-attach-done` (added, as the library answers), `-attach-goodnotes` (its how-to).
+            if DebugLaunch.flag("-attach-done") {
+                done = files.map { Attachment(id: $0.id.uuidString, name: $0.name, class: className ?? "", lecture: nil, size: $0.data.count,
+                                              type: $0.type, added: "", hasText: false, reading: $0.isImage) }
             }
+            if DebugLaunch.flag("-attach-goodnotes") { path = [.goodnotes] }
+            #endif
         }
     }
 
@@ -267,22 +278,17 @@ struct AddFilesView: View {
             }
         }
         .padding(.top, 20)
+        // From Home, the class it went to is one tap away; from a class or lecture, Done (at the top) goes back to it.
         if picksPlace, let cls = className, !cls.isEmpty, cls != "Unsorted" {
             Button { openClass(cls) } label: { Text("Open \(cls)").frame(maxWidth: .infinity) }
-                .buttonStyle(.pill(ink: true))
-                .padding(.top, 20)
-        } else {
-            Button { dismiss() } label: { Text("Done").frame(maxWidth: .infinity) }
                 .buttonStyle(.pill(ink: true))
                 .padding(.top, 20)
         }
     }
 
-    /// Close the sheet and open the class's page on Home.
+    /// Close the sheet and open the class's page on Home (`go` closes this sheet itself).
     private func openClass(_ cls: String) {
-        // FLOWS: after the merge, `app.go(.classDetail(cls), tab: .home)` (it closes this sheet itself).
-        app.pendingRoute = .classDetail(cls)
-        dismiss()
+        app.go(.classDetail(cls), tab: .home)
     }
 
     private func send() async {

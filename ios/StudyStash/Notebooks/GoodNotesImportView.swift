@@ -19,10 +19,20 @@ struct GoodNotesImportView: View {
     @State private var working = false
     @State private var opened: UUID?
 
-    init(url: URL, className: String? = nil, lecture: (id: String, title: String)? = nil) {
+    /// From GoodNotes' share sheet: it suggests the class on the calendar now (Unsorted if none).
+    private let suggestsPlace: Bool
+
+    init(url: URL) {
+        self.url = url
+        suggestsPlace = true
+    }
+
+    /// From Attach: where Attach was opened for (nil is Unsorted).
+    init(url: URL, className: String?, lecture: (id: String, title: String)?) {
         self.url = url
         _className = State(initialValue: className)
         self.lecture = lecture
+        suggestsPlace = false
     }
 
     var body: some View {
@@ -63,6 +73,7 @@ struct GoodNotesImportView: View {
                 }
             }
             .task {
+                if suggestsPlace, className == nil { className = app.classNow(app.upcoming) }
                 await read()
                 #if DEBUG
                 if ProcessInfo.processInfo.arguments.contains("-import-local"), let book {
