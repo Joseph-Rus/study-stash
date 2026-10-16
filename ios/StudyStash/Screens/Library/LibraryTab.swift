@@ -40,6 +40,8 @@ private struct LibraryHome: View {
     @State private var moving: LectureSummary?
     @State private var toast: HomeToast?
     @State private var askingUses = false
+    /// Answered (or put off) here: the row goes at once.
+    @State private var usesDone = false
     @State private var recordings = RecordingStore.shared
 
     /// Notes a page at a time, as the desktop loads them.
@@ -110,7 +112,9 @@ private struct LibraryHome: View {
                 Task { await move(l, to: to) }
             }
         }
-        .sheet(isPresented: $askingUses, onDismiss: { app.askedUses = true }) { UsesView(onboarding: true) }
+        .sheet(isPresented: $askingUses, onDismiss: { app.askedUses = true; usesDone = true }) { UsesView(onboarding: true) }
+        // Going somewhere from outside (a notification, a widget) closes what this page has open.
+        .onChange(of: app.dismissal) { _, _ in moving = nil; askingUses = false }
     }
 
     // MARK: the page
@@ -118,7 +122,7 @@ private struct LibraryHome: View {
     @ViewBuilder private func page(now: Date) -> some View {
         if app.isDemo { demoBanner.padding(.bottom, 20) }
         header(now: now)
-        if app.needsUses { usesRow.padding(.top, 20) }
+        if app.needsUses && !usesDone { usesRow.padding(.top, 20) }
         if stale { HomeOffline().padding(.top, 20) }
         OnThisPhone(gap: gap)
         if regular {
@@ -374,7 +378,9 @@ private struct LibraryHome: View {
             toast = undoing ? nil : HomeToast(text: to == "Unsorted" ? "Moved to Unsorted." : "Moved to \(to).", undo: { [l] in
                 Task { await move(l, to: from, undoing: true) }
             })
-            await library.load()
+            async let a: Void = library.load()
+            async let b: Void = onlyUnsorted ? unsorted.load() : notes.load()
+            _ = await (a, b)
             if let v = library.value { app.learn(v) }
         } catch {
             moved[l.id] = from
@@ -780,6 +786,7 @@ struct OnThisPhone: View {
             }
             .padding(.top, gap)
             .fullScreenCover(item: Binding(get: { open.map(IdentifiedUUID.init) }, set: { open = $0?.id })) { NotebookEditor(id: $0.id) }
+            .onChange(of: app.dismissal) { _, _ in open = nil }
         }
     }
 
@@ -848,6 +855,7 @@ struct OnThisPhone: View {
 /// The notebooks written (or brought in from GoodNotes) on this phone, newest first, as pages on a shelf; a tap opens
 /// one.
 struct NotebookShelf: View {
+    @Environment(AppModel.self) private var app
     @State private var store = NotebookStore.shared
     @State private var open: UUID?
     var gap: CGFloat = 32
@@ -870,6 +878,7 @@ struct NotebookShelf: View {
             }
             .padding(.top, gap)
             .fullScreenCover(item: Binding(get: { open.map(IdentifiedUUID.init) }, set: { open = $0?.id })) { NotebookEditor(id: $0.id) }
+            .onChange(of: app.dismissal) { _, _ in open = nil }
         }
     }
 
