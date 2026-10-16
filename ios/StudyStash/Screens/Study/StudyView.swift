@@ -34,7 +34,7 @@ struct StudyView: View {
     let title: String
 
     enum Mode: String, CaseIterable { case cards = "Flashcards", quiz = "Quiz" }
-    @State private var mode: Mode = .cards
+    @State private var mode: Mode = DebugLaunch.studyQuiz ? .quiz : .cards
     @State private var deck: StudyDeck?
     @State private var making = false
     @State private var problem: String?

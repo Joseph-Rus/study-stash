@@ -11,7 +11,7 @@ struct LectureView: View {
     @State private var lecture: Resource<Lecture>?
     @State private var notes: Resource<RenderedLecture>?
     @State private var files: Resource<[Attachment]>?
-    @State private var pane: Pane = .notes
+    @State private var pane: Pane = DebugLaunch.pane.flatMap(Pane.init(rawValue:)) ?? .notes
     @State private var asking = false
     @State private var studying = false
     /// The notebook beside the lecture (iPad, or a wide window).

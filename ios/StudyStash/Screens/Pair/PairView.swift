@@ -9,7 +9,7 @@ struct PairView: View {
 
     enum Step: Equatable { case welcome, finding, code(base: URL, library: Me.Library) }
 
-    @State private var step: Step = .welcome
+    @State private var step: Step = DebugLaunch.flag("-pair-code") ? .code(base: DemoLibrary.base, library: Me.Library(name: "Demo library", version: "demo")) : .welcome
     @State private var address = ""
     @State private var scanning = false
     @State private var typing = false

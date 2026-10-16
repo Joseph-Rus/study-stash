@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Search everything: lectures, the passages that matched (in notes or what was said), and classes.
 struct SearchTab: View {
-    @State private var query = ""
+    @State private var query = DebugLaunch.value("-search") ?? ""
 
     var body: some View {
         NavigationStack {

@@ -65,6 +65,10 @@ struct MainTabs: View {
     @Environment(AppModel.self) private var app
     @State private var tab: TabID = DebugLaunch.tab ?? .library
     @State private var upcoming: Upcoming? = ResponseCache.shared.read("upcoming", as: Upcoming.self)
+    #if DEBUG
+    @State private var debugSheet: DebugScreen?
+    @State private var debugCover: DebugScreen?
+    #endif
 
     var body: some View {
         TabView(selection: $tab) {
@@ -77,7 +81,7 @@ struct MainTabs: View {
         .tabViewStyle(.sidebarAdaptable)
         .tabBarMinimizeBehavior(.onScrollDown)
         .tabViewBottomAccessory { RecordAccessory(classNow: app.classNow(upcoming)) }
-        .sheet(isPresented: Binding(get: { (app.needsUses || DebugLaunch.value("-uses") != nil) && app.phase == .ready && !app.askedUses }, set: { if !$0 { app.askedUses = true } })) {
+        .sheet(isPresented: Binding(get: { (app.needsUses || DebugLaunch.flag("-uses") || DebugLaunch.value("-show") == "uses") && app.phase == .ready && !app.askedUses }, set: { if !$0 { app.askedUses = true } })) {
             UsesView(onboarding: true)
         }
         .sheet(isPresented: Binding(get: { app.showingRecorder }, set: { app.showingRecorder = $0 })) {
@@ -91,6 +95,18 @@ struct MainTabs: View {
             case let .handwriting(cls, lecture): HandwritingView(className: cls, lecture: lecture).interactiveDismissDisabled()
             }
         }
+        #if DEBUG
+        .sheet(item: $debugSheet) { s in
+            if case .ask(let scope) = s { AskSheet(scope: scope) }
+        }
+        .fullScreenCover(item: $debugCover) { s in
+            switch s {
+            case let .study(id, _): StudyView(lectureID: id, title: DebugSamples.title(of: id))
+            case .notebook: NotebookEditor(id: DebugSamples.notebook())
+            default: WidgetGallery()
+            }
+        }
+        #endif
         .onOpenURL { app.open($0) }
         .onContinueUserActivity(CSSearchableItemActionType) { activity in
             if let id = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String { app.pendingRoute = .lecture(id) }
@@ -102,11 +118,20 @@ struct MainTabs: View {
             RecordingControl.togglePause = { Recorder.shared.phase == .paused ? Recorder.shared.resume() : Recorder.shared.pause() }
             RecordingControl.start = { [app] in app.record(for: app.classNow(ResponseCache.shared.read("upcoming", as: Upcoming.self))) }
             // Notifications are asked for after "What's it for?", not on top of it.
-            if !app.needsUses && DebugLaunch.value("-uses") == nil { Task { await Reminders.setUp() } }
+            if !app.needsUses && !DebugLaunch.flag("-uses") { Task { await Reminders.setUp() } }
             upcoming = try? await app.api?.upcoming()
             await app.refreshInBackground()
             #if DEBUG
-            if ProcessInfo.processInfo.arguments.contains("-record") { app.record(for: app.classNow(upcoming)) }
+            if DebugLaunch.simulatesRecording { app.record(for: app.classNow(upcoming)) }
+            switch DebugLaunch.show {
+            case .addFiles: app.incoming = .files(DebugSamples.files(), className: "Calculus II", lecture: nil)
+            case .importAudio: app.incoming = .audio(DebugSamples.audio())
+            case .goodnotes: app.incoming = .goodnotes(DebugSamples.goodNotes())
+            case .handwriting: app.incoming = .handwriting(className: "Calculus II", lecture: nil)
+            case let s? where s.isCover: debugCover = s
+            case .ask?: debugSheet = DebugLaunch.show
+            default: break
+            }
             if let path = DebugLaunch.value("-open-file") { app.open(URL(fileURLWithPath: path)) }
             if let dir = DebugLaunch.value("-export-notebooks") {
                 for n in NotebookStore.shared.notebooks {
@@ -136,10 +161,20 @@ extension View {
     func routes() -> some View { modifier(RouteDestinations()) }
 }
 
-/// Launch arguments for screenshots and testing in the simulator, where there's no camera to scan with:
-/// `-pair <address> <code>` pairs on launch, `-library <address>` uses a library with no password, `-tab due|ask|settings|search` opens a tab, `-open lecture:<id>` or
-/// `-open class:<name>` pushes a screen onto the Library tab.
+/// Launch arguments for pictures and testing in the simulator (debug builds only), where there's no camera to scan
+/// with and no one to tap. Every screen can be opened from them; ios/DESIGN.md lists them all.
+/// - `-demo` uses the demo library in the app; `-unpaired` forgets any library and shows setup (pairing), and with
+///   `-pair-code` its second step; `-pair <address> <code>` pairs; `-library <address>` uses a library with no password.
+/// - `-tab home|due|ask|settings|search` opens a tab; `-search <words>` opens Search with them typed.
+/// - `-open lecture:<id>`, `class:<name>`, `assignment:<class>:<id>` or `search:<words>` pushes that screen on Home;
+///   `-pane notes|transcript|files` picks a lecture's tab.
+/// - `-show <screen>` opens a sheet: `record`, `ask`, `ask:lecture:<id>`, `ask:class:<name>`, `add-files`,
+///   `import-audio`, `goodnotes`, `handwriting`, `notebook`, `study:<id>`, `quiz:<id>`, `uses`, `widgets`.
+/// - `-record` records (in the simulator, made-up lines stand in for what's heard), `-ask "<question>"` asks it on
+///   the Ask tab, `-quiet` never asks to send notifications.
+/// A screen's own file can read a flag of its own with `DebugLaunch.flag("-x")` or `DebugLaunch.value("-x")`.
 enum DebugLaunch {
+    /// What follows `flag` (`offset` places on).
     static func value(_ flag: String, _ offset: Int = 1) -> String? {
         #if DEBUG
         let args = ProcessInfo.processInfo.arguments
@@ -150,13 +185,23 @@ enum DebugLaunch {
         #endif
     }
 
+    /// Whether `flag` was given at all.
+    static func flag(_ flag: String) -> Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.arguments.contains(flag)
+        #else
+        false
+        #endif
+    }
+
     static var tab: MainTabs.TabID? {
         switch value("-tab") {
+        case "home", "library": .library
         case "due": .due
         case "ask": .ask
         case "settings": .settings
         case "search": .search
-        default: nil
+        default: value("-search") != nil ? .search : nil
         }
     }
 
@@ -164,11 +209,31 @@ enum DebugLaunch {
         guard let v = value("-open") else { return nil }
         if v.hasPrefix("lecture:") { return .lecture(String(v.dropFirst(8))) }
         if v.hasPrefix("class:") { return .classDetail(String(v.dropFirst(6))) }
+        if v.hasPrefix("search:") { return .search(String(v.dropFirst(7))) }
+        if v.hasPrefix("assignment:"), let colon = v.lastIndex(of: ":"), let id = Int(v[v.index(after: colon)...]) {
+            return .assignment(class: String(v[v.index(v.startIndex, offsetBy: 11)..<colon]), id: id)
+        }
         return nil
     }
 
+    /// The made-up lecture lines stand in for the microphone (the simulator has no speech model).
+    static var simulatesRecording: Bool { flag("-record") || value("-show") == "record" }
+
+    /// A lecture opens on this tab (`-pane transcript`), as LectureView's `Pane` names them.
+    static var pane: String? { value("-pane")?.capitalized }
+
+    /// Study opens on the quiz (`-show quiz:<id>`).
+    static var studyQuiz: Bool { value("-show")?.hasPrefix("quiz") == true }
+
+    #if DEBUG
+    static var show: DebugScreen? { value("-show").flatMap(DebugScreen.init) }
+    #endif
+
     @MainActor static func pairIfAsked(_ app: AppModel) async {
-        if ProcessInfo.processInfo.arguments.contains("-demo") { app.tryDemo(); return }
+        #if DEBUG
+        if flag("-unpaired") { app.forgetHere(); return }
+        #endif
+        if flag("-demo") { app.tryDemo(); return }
         // `-library <address>`: use a library with no password (a test one) without pairing.
         if let address = value("-library"), let base = LibraryAddress.candidates(from: address).first,
            let me = try? await APIClient(base: base, session: AppModel.session).me() {

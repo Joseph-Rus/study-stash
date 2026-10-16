@@ -280,6 +280,17 @@ final class AppModel {
         phase = .unpaired
     }
 
+    #if DEBUG
+    /// Forget the library on this phone only, without asking it anything (`-unpaired`): setup shows.
+    func forgetHere() {
+        defaults.removeObject(forKey: Self.baseKey)
+        defaults.removeObject(forKey: Self.nameKey)
+        api = nil
+        libraryName = "Your library"
+        phase = .unpaired
+    }
+    #endif
+
     func forget() async {
         if let api, let me = try? await api.me(), let id = me.device?.id { try? await api.removeDevice(id) }
         if let base = api?.base {
