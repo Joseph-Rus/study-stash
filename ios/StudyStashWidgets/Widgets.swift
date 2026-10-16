@@ -12,112 +12,56 @@ struct StudyStashWidgets: WidgetBundle {
     }
 }
 
-/// Recording, on the lock screen and in the Dynamic Island.
+/// Recording, on the lock screen and in the Dynamic Island: the views are in Shared/RecordingActivity.swift. A tap
+/// opens the recording.
 struct RecordingLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: RecordingAttributes.self) { context in
-            LockScreenRecording(context: context)
-                .activityBackgroundTint(Color.black.opacity(0.55))
-                .activitySystemActionForegroundColor(.white)
+            LockScreenRecording(attributes: context.attributes, state: context.state)
+                .widgetURL(WidgetLink.recording.url)
         } dynamicIsland: { context in
             DynamicIsland {
-                DynamicIslandExpandedRegion(.leading) {
-                    Label { Text(context.attributes.className ?? "Recording").lineLimit(1) } icon: { RecDot(paused: context.state.paused) }
-                        .font(.caption.weight(.semibold))
-                }
-                DynamicIslandExpandedRegion(.trailing) {
-                    Clock(state: context.state).font(.title3.monospacedDigit().weight(.semibold)).foregroundStyle(.red)
-                }
+                DynamicIslandExpandedRegion(.leading) { RecordingIsland.Leading(state: context.state) }
+                DynamicIslandExpandedRegion(.trailing) { RecordingIsland.Trailing(state: context.state) }
                 DynamicIslandExpandedRegion(.bottom) {
-                    HStack {
-                        Text(context.attributes.title).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
-                        Spacer()
-                        Controls(state: context.state)
-                    }
+                    RecordingIsland.Bottom(attributes: context.attributes, state: context.state)
                 }
             } compactLeading: {
-                RecDot(paused: context.state.paused)
+                RecordingIsland.CompactLeading(state: context.state)
             } compactTrailing: {
-                Clock(state: context.state).monospacedDigit().foregroundStyle(.red).frame(maxWidth: 52)
+                RecordingIsland.CompactTrailing(state: context.state)
             } minimal: {
-                RecDot(paused: context.state.paused)
+                RecordingIsland.CompactLeading(state: context.state)
             }
-            .keylineTint(.red)
+            .widgetURL(WidgetLink.recording.url)
+            .keylineTint(.record)
         }
     }
 }
 
+/// The Lock Screen's banner on the page's colour, light or dark as the phone is (the system paints the background
+/// itself, so it's given the token as it is in that appearance).
 private struct LockScreenRecording: View {
-    var context: ActivityViewContext<RecordingAttributes>
-
-    var body: some View {
-        HStack(spacing: 14) {
-            ZStack {
-                Circle().fill(.red.opacity(0.2)).frame(width: 44, height: 44)
-                Image(systemName: context.state.paused ? "pause.fill" : "mic.fill").font(.title3).foregroundStyle(.red)
-            }
-            VStack(alignment: .leading, spacing: 2) {
-                Text(context.attributes.className ?? "Recording a lecture").font(.headline).foregroundStyle(.white).lineLimit(1)
-                Text(context.state.finishing ? "Saving…" : context.state.paused ? "Paused" : "Writing down what's said")
-                    .font(.caption).foregroundStyle(.white.opacity(0.7))
-            }
-            Spacer()
-            Clock(state: context.state).font(.title2.monospacedDigit().weight(.semibold)).foregroundStyle(.white)
-            Controls(state: context.state)
-        }
-        .padding(16)
-    }
-}
-
-private struct Clock: View {
+    var attributes: RecordingAttributes
     var state: RecordingAttributes.ContentState
+    @Environment(\.colorScheme) private var scheme
+
     var body: some View {
-        if state.paused || state.finishing {
-            let s = Int(state.elapsed)
-            Text(s >= 3600 ? String(format: "%d:%02d:%02d", s / 3600, s % 3600 / 60, s % 60) : String(format: "%d:%02d", s / 60, s % 60))
-        } else {
-            Text(timerInterval: state.countingFrom...Date.distantFuture, countsDown: false)
-        }
+        RecordingLockScreenView(attributes: attributes, state: state)
+            .activityBackgroundTint(Color.resolved(Palette.surface, dark: scheme == .dark))
+            .activitySystemActionForegroundColor(Color.resolved(Palette.ink, dark: scheme == .dark))
     }
 }
 
-private struct RecDot: View {
-    var paused: Bool
-    var body: some View {
-        Image(systemName: paused ? "pause.circle.fill" : "record.circle").foregroundStyle(.red)
-    }
-}
-
-private struct Controls: View {
-    var state: RecordingAttributes.ContentState
-    var body: some View {
-        if !state.finishing {
-            HStack(spacing: 8) {
-                Button(intent: PauseRecordingIntent()) {
-                    Image(systemName: state.paused ? "play.fill" : "pause.fill").frame(width: 30, height: 30)
-                }
-                .buttonStyle(.plain)
-                .background(.white.opacity(0.15), in: .circle)
-                Button(intent: StopRecordingIntent()) {
-                    Image(systemName: "stop.fill").frame(width: 30, height: 30)
-                }
-                .buttonStyle(.plain)
-                .background(.red, in: .circle)
-            }
-            .foregroundStyle(.white)
-        }
-    }
-}
-
-/// Record, in Control Center and on the Action button.
+/// Record, in Control Center and on the Action button. The system draws controls, and takes only its own symbols.
 struct RecordControl: ControlWidget {
     var body: some ControlWidgetConfiguration {
         StaticControlConfiguration(kind: "app.studystash.ios.record") {
             ControlWidgetButton(action: StartRecordingIntent()) {
-                Label("Record lecture", systemImage: "mic.fill")
+                Label("Record", systemImage: "record.circle")
             }
         }
-        .displayName("Record a lecture")
-        .description("Starts recording a lecture in Study Stash.")
+        .displayName("Record")
+        .description("Starts recording in Study Stash, into the class on your calendar now.")
     }
 }
