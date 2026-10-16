@@ -2,10 +2,11 @@ import SwiftUI
 
 /// Search everything: lectures, the passages that matched (in notes or what was said), and classes.
 struct SearchTab: View {
+    @Environment(AppModel.self) private var app
     @State private var query = DebugLaunch.value("-search") ?? ""
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: app.stack(.search)) {
             SearchResultsView(query: query, live: true)
                 .searchable(text: $query, prompt: "Lectures, topics, what was said")
                 .routes()

@@ -54,7 +54,7 @@ struct RecordView: View {
         }
         .task {
             if recorder.phase == .idle || isFailed {
-                await recorder.start(className: startClass)
+                await recorder.start(className: startClass, title: app.recordTitle)
             }
             #if DEBUG
             if let after = DebugLaunch.value("-stop-after").flatMap(Double.init) {
