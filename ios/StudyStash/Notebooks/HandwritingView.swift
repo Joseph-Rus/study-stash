@@ -5,12 +5,14 @@ import SwiftUI
 struct HandwritingView: View {
     var className: String?
     var lecture: (id: String, title: String)?
+    /// Beside a lecture on an iPad, not a screen of its own: no Done, it's closed from the lecture.
+    var embedded = false
     @State private var store = NotebookStore.shared
     @State private var id: UUID?
 
     var body: some View {
         Group {
-            if let id { NotebookEditor(id: id) } else { Color.paper }
+            if let id { NotebookEditor(id: id, embedded: embedded) } else { Color.paper }
         }
         .task {
             if id != nil { return }
@@ -33,6 +35,7 @@ struct NotebookEditor: View {
     @Environment(AppModel.self) private var app
     @Environment(\.dismiss) private var dismiss
     let id: UUID
+    var embedded = false
     @State private var store = NotebookStore.shared
     @State private var index = 0
     @State private var saving = false
@@ -43,7 +46,39 @@ struct NotebookEditor: View {
     private var notebook: Notebook? { store.notebooks.first { $0.id == id } }
 
     var body: some View {
-        NavigationStack {
+        if embedded {
+            // Beside a lecture: inside its navigation, so a bar of its own rather than a second NavigationStack.
+            VStack(spacing: 0) {
+                HStack(spacing: 14) {
+                    Text(notebook?.title ?? "Notes").font(.headline).lineLimit(1)
+                    Spacer()
+                    Button("Previous page", systemImage: "chevron.left") { withAnimation { index -= 1 } }.disabled(index == 0).labelStyle(.iconOnly)
+                    Text("\(index + 1)/\(notebook?.pages.count ?? 1)").font(.footnote.monospacedDigit()).foregroundStyle(.secondary)
+                    if index + 1 < (notebook?.pages.count ?? 1) {
+                        Button("Next page", systemImage: "chevron.right") { withAnimation { index += 1 } }.labelStyle(.iconOnly)
+                    } else {
+                        Button("Add a page", systemImage: "plus") { addPage() }.labelStyle(.iconOnly)
+                    }
+                    Button { Task { await save() } } label: {
+                        if saving { ProgressView() } else { Image(systemName: notebook?.needsSaving == false ? "checkmark.icloud" : "icloud.and.arrow.up") }
+                    }
+                    .accessibilityLabel("Save to library")
+                }
+                .padding(.horizontal, 16).padding(.vertical, 10)
+                .background(.bar)
+                pages
+            }
+        } else {
+            NavigationStack {
+                pages
+                    .navigationTitle(notebook?.title ?? "Notes")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar { toolbar }
+            }
+        }
+    }
+
+    private var pages: some View {
             ZStack(alignment: .bottom) {
                 Color(white: 0.9).ignoresSafeArea()
                 if let n = notebook, n.pages.indices.contains(index) {
@@ -65,9 +100,6 @@ struct NotebookEditor: View {
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
-            .navigationTitle(notebook?.title ?? "Notes")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { toolbar }
             .alert("Title", isPresented: $renaming) {
                 TextField("Title", text: Binding(get: { notebook?.title ?? "" }, set: { t in
                     guard var n = notebook else { return }
@@ -80,12 +112,13 @@ struct NotebookEditor: View {
             } message: {
                 Text("A copy saved to your library stays there.")
             }
-        }
     }
 
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
-        ToolbarItem(placement: .topBarLeading) {
-            Button("Done", systemImage: "chevron.down") { dismiss() }
+        if !embedded {
+            ToolbarItem(placement: .topBarLeading) {
+                Button("Done", systemImage: "chevron.down") { dismiss() }
+            }
         }
         ToolbarItemGroup(placement: .topBarTrailing) {
             Button {

@@ -14,54 +14,73 @@ struct LectureView: View {
     @State private var pane: Pane = .notes
     @State private var asking = false
     @State private var studying = false
+    /// The notebook beside the lecture (iPad, or a wide window).
+    @State private var inkBeside = false
+    @Environment(\.horizontalSizeClass) private var sizeClass
 
     var body: some View {
         let l = lecture?.value
         let color = app.color(of: l?.class ?? notes?.value?.class)
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                if let lecture, l == nil {
-                    Loaded(resource: lecture, failure: "Couldn't load this lecture") { _ in EmptyView() }
-                }
-                if let l {
-                    header(l, color)
-                    Picker("Show", selection: $pane.animation(.snappy)) {
-                        ForEach(Pane.allCases, id: \.self) { p in
-                            Text(p == .files && (files?.value?.count ?? 0) > 0 ? "Files (\(files!.value!.count))" : p.rawValue).tag(p)
-                        }
+        HStack(spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    if let lecture, l == nil {
+                        Loaded(resource: lecture, failure: "Couldn't load this lecture") { _ in EmptyView() }
                     }
-                    .pickerStyle(.segmented)
+                    if let l {
+                        header(l, color)
+                        Picker("Show", selection: $pane.animation(.snappy)) {
+                            ForEach(Pane.allCases, id: \.self) { p in
+                                Text(p == .files && (files?.value?.count ?? 0) > 0 ? "Files (\(files!.value!.count))" : p.rawValue).tag(p)
+                            }
+                        }
+                        .pickerStyle(.segmented)
 
-                    switch pane {
-                    case .notes: notesPane(l, color)
-                    case .transcript: TranscriptView(text: l.transcript)
-                    case .files:
-                        if let f = files?.value, !f.isEmpty { AttachmentList(files: f) } else {
-                            ContentUnavailableView("No files", systemImage: "paperclip",
-                                                   description: Text("Handwritten notes, slides or photos from this lecture show up here."))
-                        }
-                        HStack {
-                            Button { app.incoming = .handwriting(className: l.class, lecture: (l.id, l.displayTitle)) } label: {
-                                Label("Write notes", systemImage: "pencil.and.scribble").frame(maxWidth: .infinity)
+                        switch pane {
+                        case .notes: notesPane(l, color)
+                        case .transcript: TranscriptView(text: l.transcript)
+                        case .files:
+                            if let f = files?.value, !f.isEmpty { AttachmentList(files: f) } else {
+                                ContentUnavailableView("No files", systemImage: "paperclip",
+                                                       description: Text("Handwritten notes, slides or photos from this lecture show up here."))
                             }
-                            Button { app.incoming = .files([], className: l.class, lecture: (l.id, l.displayTitle)) } label: {
-                                Label("Add files", systemImage: "doc.viewfinder").frame(maxWidth: .infinity)
+                            HStack {
+                                Button { app.incoming = .handwriting(className: l.class, lecture: (l.id, l.displayTitle)) } label: {
+                                    Label("Write notes", systemImage: "pencil.and.scribble").frame(maxWidth: .infinity)
+                                }
+                                Button { app.incoming = .files([], className: l.class, lecture: (l.id, l.displayTitle)) } label: {
+                                    Label("Add files", systemImage: "doc.viewfinder").frame(maxWidth: .infinity)
+                                }
                             }
+                            .buttonStyle(.bordered)
+                            .controlSize(.large)
                         }
-                        .buttonStyle(.bordered)
-                        .controlSize(.large)
                     }
                 }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 90)
+                .frame(maxWidth: 720)
+                .frame(maxWidth: .infinity)
             }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 90)
-            .frame(maxWidth: 720)
-            .frame(maxWidth: .infinity)
+            .background(.paper)
+            if inkBeside, let l {
+                Divider()
+                HandwritingView(className: l.class, lecture: (l.id, l.displayTitle), embedded: true)
+                    .frame(maxWidth: .infinity)
+                    .transition(.move(edge: .trailing))
+            }
         }
         .background(.paper)
         .titleOnScroll(l?.displayTitle ?? "", after: 170)
         .toolbar {
             if let l {
+                if sizeClass == .regular {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button { withAnimation(.smooth) { inkBeside.toggle() } } label: {
+                            Label(inkBeside ? "Close notebook" : "Write alongside", systemImage: inkBeside ? "rectangle.righthalf.inset.filled" : "pencil.and.scribble")
+                        }
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
                         Button { app.incoming = .handwriting(className: l.class, lecture: (l.id, l.displayTitle)) } label: {
@@ -113,6 +132,7 @@ struct LectureView: View {
             await load()
             #if DEBUG
             if DebugLaunch.value("-study") != nil { studying = true }
+            if DebugLaunch.value("-ink") != nil { inkBeside = true }
             #endif
             if let l = lecture?.value, (notes?.value?.html ?? "").isEmpty, !l.transcript.isEmpty, l.status != "done" { pane = .transcript }
         }
