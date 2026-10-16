@@ -114,7 +114,7 @@ struct AskTab: View {
     @State private var scope: AskScope = .everything
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: app.stack(.ask)) {
             AskThread(conversation: conversation, scope: $scope, chooseScope: true)
                 .navigationTitle("Ask")
                 .toolbar {

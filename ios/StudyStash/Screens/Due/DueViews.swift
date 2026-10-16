@@ -6,7 +6,7 @@ struct DueTab: View {
     @Environment(AppModel.self) private var app
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: app.stack(.due)) {
             if let api = app.api { DueList_(api: api).routes() }
         }
     }

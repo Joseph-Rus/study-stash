@@ -25,7 +25,7 @@ struct EventRow: View {
         let titleIsClass = cls.map { ClassMatch.normalized($0) == ClassMatch.normalized(event.title) } ?? false
 
         VStack(alignment: .leading, spacing: 6) {
-            Button { app.record(for: cls) } label: {
+            Button { app.record(for: cls, title: "\(titleIsClass ? cls ?? event.title : event.title), \(Format.words(start, "EEE d MMM"))") } label: {
                 HStack(alignment: .center, spacing: sizeClass == .regular ? 20 : 14) {
                     VStack(alignment: .leading, spacing: 0) {
                         Text(event.allDay ? "All day" : Format.time(start)).textStyle(.when)

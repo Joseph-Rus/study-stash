@@ -124,7 +124,8 @@ enum Reminders {
     }
 }
 
-/// Notifications tapped: Record starts recording the class; a lecture or assignment opens.
+/// Notifications tapped: a class starting opens Home (its Record button records it); a lecture's notes open the
+/// lecture; something due opens it on Due.
 final class NotificationRouter: NSObject, UNUserNotificationCenterDelegate, @unchecked Sendable {
     static let shared = NotificationRouter()
     @MainActor weak var app: AppModel?
@@ -142,12 +143,14 @@ final class NotificationRouter: NSObject, UNUserNotificationCenterDelegate, @unc
         let assignment = info["assignment"] as? Int
         await MainActor.run {
             guard let app else { return }
-            if action == "record" || kind == Reminders.Kind.classStart.rawValue {
+            if action == "record" {
                 app.record(for: cls)
+            } else if kind == Reminders.Kind.classStart.rawValue {
+                app.go(to: .home)
             } else if let lecture {
-                app.pendingRoute = .lecture(lecture)
+                app.go(.lecture(lecture), tab: .home, root: true)
             } else if let cls, let id = assignment {
-                app.pendingRoute = .assignment(class: cls, id: id)
+                app.go(.assignment(class: cls, id: id), tab: app.forSchool ? .due : .home, root: true)
             }
         }
     }
