@@ -32,7 +32,7 @@ struct RootView: View {
             case .unpaired:
                 PairView().transition(.opacity)
             case .checking, .ready:
-                MainTabs().transition(.opacity)
+                MainTabs().id(app.api?.base).transition(.opacity)
             }
         }
         .animation(.smooth, value: app.phase)
@@ -43,14 +43,16 @@ struct RootView: View {
             if app.phase == .checking { await app.check() }
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active, app.phase != .unpaired { Task { await app.check() } }
+            if phase == .active, app.phase != .unpaired, DebugLaunch.value("-library") == nil { Task { await app.check() } }
         }
     }
 }
 
 struct MainTabs: View {
     enum TabID: Hashable { case library, due, ask, settings, search }
+    @Environment(AppModel.self) private var app
     @State private var tab: TabID = DebugLaunch.tab ?? .library
+    @State private var upcoming: Upcoming? = ResponseCache.shared.read("upcoming", as: Upcoming.self)
 
     var body: some View {
         TabView(selection: $tab) {
@@ -62,6 +64,16 @@ struct MainTabs: View {
         }
         .tabViewStyle(.sidebarAdaptable)
         .tabBarMinimizeBehavior(.onScrollDown)
+        .tabViewBottomAccessory { RecordAccessory(classNow: app.classNow(upcoming)) }
+        .sheet(isPresented: Binding(get: { app.showingRecorder }, set: { app.showingRecorder = $0 })) {
+            RecordView(startClass: app.recordFor)
+        }
+        .task {
+            upcoming = try? await app.api?.upcoming()
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("-record") { app.record(for: app.classNow(upcoming)) }
+            #endif
+        }
     }
 }
 
@@ -84,7 +96,7 @@ extension View {
 }
 
 /// Launch arguments for screenshots and testing in the simulator, where there's no camera to scan with:
-/// `-pair <address> <code>` pairs on launch, `-tab due|ask|settings|search` opens a tab, `-open lecture:<id>` or
+/// `-pair <address> <code>` pairs on launch, `-library <address>` uses a library with no password, `-tab due|ask|settings|search` opens a tab, `-open lecture:<id>` or
 /// `-open class:<name>` pushes a screen onto the Library tab.
 enum DebugLaunch {
     static func value(_ flag: String, _ offset: Int = 1) -> String? {
@@ -115,6 +127,12 @@ enum DebugLaunch {
     }
 
     @MainActor static func pairIfAsked(_ app: AppModel) async {
+        // `-library <address>`: use a library with no password (a test one) without pairing.
+        if let address = value("-library"), let base = LibraryAddress.candidates(from: address).first,
+           let me = try? await APIClient(base: base, session: AppModel.session).me() {
+            app.paired(base: base, library: me.library)
+            return
+        }
         guard let address = value("-pair"), let code = value("-pair", 2), app.phase == .unpaired else { return }
         for base in LibraryAddress.candidates(from: address) {
             let api = APIClient(base: base, session: AppModel.session)

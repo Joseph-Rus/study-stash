@@ -19,6 +19,15 @@ final class AppModel {
     private(set) var libraryName: String
     /// The library couldn't be reached last time it was asked: screens show what was saved before.
     var offline = false
+    /// The recording screen is up; `recordFor` is the class it starts with.
+    var showingRecorder = false
+    var recordFor: String?
+
+    func record(for cls: String?) {
+        recordFor = cls
+        showingRecorder = true
+    }
+
     /// Each class's place in the library, which is its colour.
     var classIndex: [String: Int] = [:]
 
@@ -28,27 +37,43 @@ final class AppModel {
         return (classIndex[cls] ?? classIndex[ClassMatch.normalized(cls)]).map { ClassColor.of($0) } ?? .accentColor
     }
 
-    /// A calendar event's class colour: the class the library matched, else one whose name the title carries.
-    func color(ofEvent e: UpcomingEvent) -> Color {
-        if let c = e.class { return color(of: c) }
+    /// Every class, as the library last said.
+    var classes: [ClassInfo] = []
+
+    /// A calendar event's class: the one the library matched, else one whose name, other name or course code the
+    /// title carries ("Machine Learning" in "Machine & Deep Learning").
+    func className(ofEvent e: UpcomingEvent) -> String? {
+        if let c = e.class { return c }
         let title = ClassMatch.normalized(e.title)
-        if let i = classIndex[title] { return ClassColor.of(i) }
-        if let hit = classIndex.filter({ $0.key.count >= 4 && $0.key == $0.key.lowercased() && title.contains($0.key) }).max(by: { $0.key.count < $1.key.count }) {
-            return ClassColor.of(hit.value)
-        }
-        // Every word of a class's name in the title: "Machine Learning" in "Machine & Deep Learning".
         let words = Set(title.split(separator: " "))
-        if let hit = classIndex.filter({ k, _ in
-            let ws = k.split(separator: " ").filter { $0.count > 2 && $0 != "and" }
-            return k == k.lowercased() && ws.count >= 2 && ws.allSatisfy(words.contains)
-        }).max(by: { $0.key.count < $1.key.count }) {
-            return ClassColor.of(hit.value)
+        var best: (name: String, score: Int)?
+        for c in classes {
+            for key in [c.name] + (c.aliases ?? []) + [c.code ?? ""] where !key.isEmpty {
+                let k = ClassMatch.normalized(key)
+                let ws = k.split(separator: " ").filter { $0.count > 2 && $0 != "and" }
+                let hit = k == title || (k.count >= 4 && title.contains(k)) || (ws.count >= 2 && ws.allSatisfy(words.contains))
+                if hit, k.count > (best?.score ?? 0) { best = (c.name, k.count) }
+            }
         }
-        return .secondary
+        return best?.name
+    }
+
+    func color(ofEvent e: UpcomingEvent) -> Color {
+        className(ofEvent: e).map { color(of: $0) } ?? .secondary
+    }
+
+    /// The class on the calendar right now (or starting in the next 10 minutes), to record for.
+    func classNow(_ upcoming: Upcoming?) -> String? {
+        let now = Date.now
+        return upcoming?.events.first { e in
+            guard !e.allDay, let s = Format.parse(e.start), let end = Format.parse(e.end) else { return false }
+            return s.addingTimeInterval(-600) <= now && now < end
+        }.flatMap(className(ofEvent:))
     }
 
     func learn(_ overview: LibraryOverview) {
         classIndex = Self.index(overview.classes)
+        classes = overview.classes
         libraryName = overview.name
     }
 
@@ -74,6 +99,7 @@ final class AppModel {
         libraryName = defaults.string(forKey: Self.nameKey) ?? "Your library"
         if let saved = ResponseCache.shared.read("library", as: LibraryOverview.self) {
             classIndex = Self.index(saved.classes)
+            classes = saved.classes
         }
         if let s = defaults.string(forKey: Self.baseKey), let base = URL(string: s) {
             phase = .checking
@@ -109,6 +135,7 @@ final class AppModel {
             defaults.set(me.library.name, forKey: Self.nameKey)
             offline = false
             phase = me.paired ? .ready : .unpaired
+            if me.paired { await RecordingStore.shared.sendWaiting(api: api) }
         } catch let e as APIError where e.unreachable {
             offline = true
             phase = .ready
@@ -119,6 +146,12 @@ final class AppModel {
 
     /// Paired with the library at `base`: remember it.
     func paired(base: URL, library: Me.Library) {
+        // Another library's lectures aren't this one's.
+        if api?.base != base {
+            ResponseCache.shared.clear()
+            classIndex = [:]
+            classes = []
+        }
         defaults.set(base.absoluteString, forKey: Self.baseKey)
         defaults.set(library.name, forKey: Self.nameKey)
         libraryName = library.name

@@ -201,3 +201,57 @@ import Testing
         #expect(ColourTheme.named("nope") == .lagoon)
     }
 }
+
+// MARK: - recordings
+
+@Suite struct RecordingTests {
+    @Test func idsAreWhatTheLibraryTakes() {
+        let id = Recording.newID(Format.parse("2026-10-15T09:15:00")!)
+        #expect(id.wholeMatch(of: /phone-20261015-091500-[0-9a-f]{6}/) != nil)
+        #expect(Recording.newID() != Recording.newID())
+    }
+
+    @Test func transcriptLinesAsTheLibraryReadsThem() {
+        var r = Recording(id: "phone-x", started: .now)
+        r.segments = [.init(start: 5, text: " Hello there "), .init(start: 65, text: ""), .init(start: 3723, text: "Much later")]
+        #expect(r.transcript == "[00:05] Hello there\n[1:02:03] Much later")
+    }
+
+    @Test func payloadKeepsTypedTitleAndNotesOnly() throws {
+        var r = Recording(id: "phone-20261015-091500-a1b2c3", started: Format.parse("2026-10-15T09:15:00")!, className: "Compilers")
+        r.segments = [.init(start: 0, text: "Hi")]
+        r.notes = "  \n"
+        let p = r.payload
+        #expect(p.title == nil && p.title_typed == false && p.notes == nil && p.class == "Compilers")
+        #expect(p.date.hasPrefix("2026-10-15T09:15:00"))
+        #expect(r.displayTitle.hasPrefix("Compilers, "))
+        r.title = "Midterm review"
+        r.titleTyped = true
+        r.notes = "- ask about LR(1)"
+        #expect(r.payload.title == "Midterm review" && r.payload.title_typed && r.payload.notes == "- ask about LR(1)")
+    }
+
+    @Test @MainActor func storeKeepsRecordingsAndMarksInterruptedOnesWaiting() {
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let store = RecordingStore(folder: folder)
+        store.save(Recording(id: "phone-20261015-091500-a1b2c3", started: .now))
+        let again = RecordingStore(folder: folder)
+        #expect(again.recordings.count == 1)
+        #expect(again.recordings[0].state == .waiting)
+        again.delete(again.recordings[0])
+        #expect(RecordingStore(folder: folder).recordings.isEmpty)
+    }
+
+    @Test @MainActor func calendarEventsFindTheirClass() {
+        let app = AppModel(defaults: UserDefaults(suiteName: UUID().uuidString)!)
+        app.learn(LibraryOverview(name: "L", version: "1", classes: [
+            ClassInfo(name: "Machine Learning", lectures: 1, color: 0),
+            ClassInfo(name: "Theory of Computation and Compilers", lectures: 1, color: 1, code: "CSCI 4150"),
+        ], unsorted: 0, writing: 0, ask: true))
+        func event(_ title: String) -> UpcomingEvent { UpcomingEvent(id: "e", title: title, start: "", end: "", allDay: false) }
+        #expect(app.className(ofEvent: event("Machine & Deep Learning")) == "Machine Learning")
+        #expect(app.className(ofEvent: event("Theory Of Computation & Compilers")) == "Theory of Computation and Compilers")
+        #expect(app.className(ofEvent: event("CSCI 4150 Lab")) == "Theory of Computation and Compilers")
+        #expect(app.className(ofEvent: event("Lunch")) == nil)
+    }
+}

@@ -45,6 +45,7 @@ private struct LibraryHome: View {
                         .symbolEffect(.pulse)
                         .padding(.horizontal, 4)
                 }
+                OnThisPhone()
                 nextUp
                 recentSection
                 classesSection
@@ -60,7 +61,7 @@ private struct LibraryHome: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
-                    Button { } label: { Label("Record a lecture", systemImage: "mic.fill") }.disabled(true)
+                    Button { app.record(for: nil) } label: { Label("Record a lecture", systemImage: "mic.fill") }
                     Button { } label: { Label("Import a voice memo", systemImage: "waveform") }.disabled(true)
                     Button { } label: { Label("Add files", systemImage: "paperclip") }.disabled(true)
                 } label: {
@@ -131,13 +132,11 @@ private struct LibraryHome: View {
                                     .frame(width: 44)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(entry.item.name).font(.body.weight(.medium)).lineLimit(1)
-                                    HStack(spacing: 4) {
-                                        Text(Format.dueWhen(entry.item.due))
-                                            .foregroundStyle(entry.overdue ? .red : .secondary)
-                                            .fontWeight(entry.overdue ? .semibold : .regular)
-                                        Text("· \(entry.item.class)").foregroundStyle(.secondary).lineLimit(1)
-                                    }
-                                    .font(.subheadline)
+                                    Text(Format.dueWhen(entry.item.due))
+                                        .font(.subheadline)
+                                        .foregroundStyle(entry.overdue ? .red : .secondary)
+                                        .fontWeight(entry.overdue ? .semibold : .regular)
+                                        .lineLimit(1)
                                 }
                                 Spacer(minLength: 0)
                                 Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
@@ -253,5 +252,48 @@ struct ClassTile: View {
         .shadow(color: .black.opacity(0.04), radius: 1, y: 1)
         .shadow(color: .black.opacity(0.04), radius: 12, y: 4)
         .contentShape(.rect(cornerRadius: 22))
+    }
+}
+
+/// Recordings made on this phone that aren't in the library yet: sending, waiting for it, or refused, each with a
+/// way to send again or delete.
+struct OnThisPhone: View {
+    @Environment(AppModel.self) private var app
+    @State private var store = RecordingStore.shared
+
+    var body: some View {
+        let list = store.unsent.filter { $0.state != .recording }
+        if !list.isEmpty {
+            SectionHeading(title: "On this phone")
+            Card(padding: 0) {
+                VStack(spacing: 0) {
+                    ForEach(Array(list.enumerated()), id: \.element.id) { i, r in
+                        HStack(spacing: 12) {
+                            Image(systemName: r.state == .failed ? "exclamationmark.triangle.fill" : r.state == .sending ? "arrow.up.circle" : "tray.and.arrow.up")
+                                .foregroundStyle(r.state == .failed ? .orange : .accentColor)
+                                .symbolEffect(.pulse, isActive: r.state == .sending)
+                                .frame(width: 28)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(r.displayTitle).font(.body.weight(.medium)).lineLimit(1)
+                                Text(r.state == .sending ? "Sending…" : r.error ?? "Waiting to reach your library")
+                                    .font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                            }
+                            Spacer()
+                            Menu {
+                                Button("Send now", systemImage: "arrow.up") { if let api = app.api { Task { await store.send(r.id, api: api) } } }
+                                if let audio = store.audioURL(r), FileManager.default.fileExists(atPath: audio.path) {
+                                    ShareLink(item: audio) { Label("Share the audio", systemImage: "waveform") }
+                                }
+                                Button("Delete", systemImage: "trash", role: .destructive) { store.delete(r) }
+                            } label: {
+                                Image(systemName: "ellipsis.circle").font(.title3).foregroundStyle(.secondary)
+                            }
+                        }
+                        .padding(.horizontal, 14).padding(.vertical, 10)
+                        if i < list.count - 1 { Divider().padding(.leading, 54) }
+                    }
+                }
+            }
+        }
     }
 }
