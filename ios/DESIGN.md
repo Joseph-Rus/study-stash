@@ -48,7 +48,8 @@ The desktop's `Skin.Palette` by the same names, light and dark, as `ShapeStyle`s
 
 `.canvas` `.surface` `.surfaceSunken` `.surfaceToday` `.line` `.hover` `.press` `.ink` `.inkMuted` `.inkSubtle`
 `.record` `.onRecord` `.late` `.focus` — e.g. `.foregroundStyle(.inkMuted)`, `.background(.surfaceSunken, in: …)`.
-UIKit: `Palette.ink` etc.
+UIKit: `Palette.ink` etc. Text with no colour of its own is the system's label colour, a shade off ink: give a page's
+content `.foregroundStyle(.ink)` (once, on its outermost view) and the rest its muted or subtle ink.
 
 Highlighters: `Highlighter` (`.yellow .green .pink .blue .orange .violet .teal .lime`), each with `.highlight` (behind
 ink text) and `.swatch` (nothing on it). **A class's highlighter is `app.hue(of: name)`** (or
@@ -250,6 +251,21 @@ was used as a tint, which the page lanes remove (use `app.hue(of:)` with a Swatc
 Nouns: `app.noun(of: cls)` "lecture" / "meeting" / "recording" (a class in Classes, a folder in Clubs or Work, none);
 `Nouns.section(noun)` "Lectures"; `Nouns.untitled(folder:date:)` "Recording, Sat 10 Oct at 4:12 PM". Mixed lists
 say "notes" ("Ask anything about your notes"). The library now sends a class's `group` (`ClassInfo.group`).
+
+## What changed underneath (decisions every lane should know)
+
+- The first tab is **Home** (`home` icon), as the desktop's sidebar says; Due is `event_upcoming`, Ask `chat`,
+  Settings `settings`, Search `search`. Their screens' own titles are the page lanes' (the desktop's Home is titled
+  with the date).
+- `ColourTheme` and its picker are gone (Settings' Colour section was removed so it compiles; the settings lane adds
+  Appearance). Nothing non-visual needed it.
+- Widgets: `Glance.Event.color` and `Glance.Due.color` now hold a highlighter's name (`"blue"`), not a hex: draw it with
+  `Highlighter(rawValue:)`. The widget extension compiles `Theme.swift`, `Type.swift` and `Icons.swift` and has the
+  fonts and the icons (not `Components.swift` or the logo: copy what you need into `Shared/`, or ask). The Control
+  Center control and App Shortcuts keep SF Symbols: the system draws them and takes nothing else.
+- The library's `ClassInfo.group` ("" for Classes, "Clubs", "Work", …) decides a note's noun (`app.noun(of:)`).
+- The demo library's notes have times, and one is unsorted and untitled (`demo-unsorted-study-group`), so rows show
+  "Recording, Tue 13 Oct at 4:00 PM" and the inbox label.
 
 ## Which desktop page each phone page is
 
