@@ -28,16 +28,9 @@ private struct DueList_: View {
             if due.stale { OfflineNote().frame(maxWidth: .infinity).listRowBackground(Color.clear) }
             if let events = upcoming.value?.events.filter({ (Format.parse($0.end) ?? .distantPast) > .now }).prefix(6), !events.isEmpty {
                 Section("Coming up") {
-                    ForEach(Array(events)) { e in
-                        HStack(spacing: 12) {
-                            RoundedRectangle(cornerRadius: 2).fill(app.color(ofEvent: e).gradient).frame(width: 4, height: 34)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(e.title).font(.body.weight(.medium)).lineLimit(1)
-                                Text([Format.dayLabel(Format.parse(e.start) ?? .now), Format.timeRange(e.start, e.end, allDay: e.allDay), e.location]
-                                    .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
-                                    .font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
-                            }
-                        }
+                    let list = Array(events)
+                    ForEach(Array(list.enumerated()), id: \.element.id) { i, e in
+                        EventRow(event: e, suggest: !list[..<i].contains { $0.title == e.title })
                     }
                 }
             }

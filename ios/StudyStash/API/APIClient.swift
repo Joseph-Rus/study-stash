@@ -225,6 +225,12 @@ final class APIClient: Sendable {
         try await lines("/chat", ChatBody(message: message, chat: chat, class: cls, lecture: lecture), as: ChatEvent.self)
     }
 
+    /// An event's title as another name of a class, so every event with it is that class's (remove takes it away).
+    func setAlias(_ alias: String, class cls: String, remove: Bool = false) async throws -> LibraryOverview {
+        struct Body: Encodable { var `class`: String; var alias: String; var remove: Bool }
+        return try await post("/classes/alias", Body(class: cls, alias: alias, remove: remove))
+    }
+
     // MARK: what's coming
 
     func due() async throws -> DueList { try await get("/canvas/due") }

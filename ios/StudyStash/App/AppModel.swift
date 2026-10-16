@@ -87,6 +87,19 @@ final class AppModel {
         return best?.name
     }
 
+    /// A class the event looks like it's for, when the library didn't match one: the one to suggest.
+    func suggestion(forEvent e: UpcomingEvent) -> String? {
+        e.class == nil ? className(ofEvent: e) : nil
+    }
+
+    /// Every event called this is `cls`'s from now on (the library keeps the title as one of the class's names).
+    func file(event e: UpcomingEvent, in cls: String) async throws {
+        guard let api else { return }
+        let overview = try await api.setAlias(e.title, class: cls)
+        learn(overview)
+        ResponseCache.shared.write("library", overview)
+    }
+
     func color(ofEvent e: UpcomingEvent) -> Color {
         className(ofEvent: e).map { color(of: $0) } ?? .secondary
     }
