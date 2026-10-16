@@ -48,6 +48,7 @@ private struct LibraryHome: View {
                 OnThisPhone()
                 nextUp
                 recentSection
+                NotebookShelf()
                 classesSection
             }
             .padding(.horizontal)
@@ -62,8 +63,9 @@ private struct LibraryHome: View {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Button { app.record(for: nil) } label: { Label("Record a lecture", systemImage: "mic.fill") }
-                    Button { } label: { Label("Import a voice memo", systemImage: "waveform") }.disabled(true)
-                    Button { } label: { Label("Add files", systemImage: "paperclip") }.disabled(true)
+                    Button { app.incoming = .handwriting(className: nil, lecture: nil) } label: { Label("Write notes", systemImage: "pencil.and.scribble") }
+                    Button { app.incoming = .files([], className: nil, lecture: nil) } label: { Label("Add files or scan pages", systemImage: "doc.viewfinder") }
+                    Button { app.incoming = .audio(nil) } label: { Label("Import a recording", systemImage: "waveform") }
                 } label: {
                     Image(systemName: "plus")
                 }
@@ -297,3 +299,40 @@ struct OnThisPhone: View {
         }
     }
 }
+
+/// The notebooks written (or brought in from GoodNotes) on this phone, newest first; a tap opens one.
+struct NotebookShelf: View {
+    @State private var store = NotebookStore.shared
+    @State private var open: UUID?
+
+    var body: some View {
+        if !store.notebooks.isEmpty {
+            SectionHeading(title: "Notebooks")
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    ForEach(store.notebooks) { n in
+                        Button { open = n.id } label: {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Group {
+                                    if let image = store.thumbnail(n, width: 220) { Image(uiImage: image).resizable().scaledToFill() } else { Color.white }
+                                }
+                                .frame(width: 110, height: 142)
+                                .clipShape(.rect(cornerRadius: 10, style: .continuous))
+                                .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
+                                Text(n.title).font(.caption.weight(.semibold)).lineLimit(2).frame(width: 110, alignment: .leading)
+                                Text(n.needsSaving ? "Not saved to library" : "In \(n.className ?? "library")")
+                                    .font(.caption2).foregroundStyle(n.needsSaving ? .orange : .secondary).lineLimit(1)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 4)
+                .padding(.vertical, 4)
+            }
+            .fullScreenCover(item: Binding(get: { open.map(IdentifiedUUID.init) }, set: { open = $0?.id })) { NotebookEditor(id: $0.id) }
+        }
+    }
+}
+
+struct IdentifiedUUID: Identifiable { var id: UUID }

@@ -285,7 +285,7 @@ final class Recorder {
 
     /// The transcriber for the phone's language (or English), its model downloaded the first time: SpeechTranscriber,
     /// made for long talks, where the phone has it, else DictationTranscriber (older phones, and the simulator).
-    private static func transcriber() async throws -> (any SpeechModule, AsyncThrowingStream<Heard, Error>, Locale) {
+    static func transcriber() async throws -> (any SpeechModule, AsyncThrowingStream<Heard, Error>, Locale) {
         if SpeechTranscriber.isAvailable {
             var found = await SpeechTranscriber.supportedLocale(equivalentTo: .current)
             if found == nil { found = await SpeechTranscriber.supportedLocale(equivalentTo: Locale(identifier: "en-US")) }

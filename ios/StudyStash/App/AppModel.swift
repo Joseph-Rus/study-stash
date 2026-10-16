@@ -19,6 +19,35 @@ final class AppModel {
     private(set) var libraryName: String
     /// The library couldn't be reached last time it was asked: screens show what was saved before.
     var offline = false
+    /// Something opened from another app (or chosen from +), waiting for its sheet.
+    enum Incoming: Identifiable {
+        case files([PendingFile], className: String?, lecture: (id: String, title: String)?)
+        case audio(PendingFile?)
+        case goodnotes(URL)
+        case handwriting(className: String?, lecture: (id: String, title: String)?)
+
+        var id: String {
+            switch self {
+            case .files(let f, _, _): "files-\(f.map(\.id.uuidString).joined())"
+            case .audio(let f): "audio-\(f?.id.uuidString ?? "")"
+            case .goodnotes(let u): "goodnotes-\(u.path)"
+            case .handwriting(let c, let l): "handwriting-\(c ?? "")-\(l?.id ?? "")"
+            }
+        }
+    }
+
+    var incoming: Incoming?
+
+    /// A file another app handed over ("Open in Study Stash" / the share sheet).
+    func open(_ url: URL) {
+        if url.pathExtension.lowercased() == "goodnotes" {
+            incoming = .goodnotes(url)
+            return
+        }
+        guard let file = PendingFile.from(url: url) else { return }
+        incoming = file.type.hasPrefix("audio/") || file.type.hasPrefix("video/") ? .audio(file) : .files([file], className: nil, lecture: nil)
+    }
+
     /// The recording screen is up; `recordFor` is the class it starts with.
     var showingRecorder = false
     var recordFor: String?

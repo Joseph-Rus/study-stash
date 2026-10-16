@@ -39,6 +39,16 @@ struct LectureView: View {
                             ContentUnavailableView("No files", systemImage: "paperclip",
                                                    description: Text("Handwritten notes, slides or photos from this lecture show up here."))
                         }
+                        HStack {
+                            Button { app.incoming = .handwriting(className: l.class, lecture: (l.id, l.displayTitle)) } label: {
+                                Label("Write notes", systemImage: "pencil.and.scribble").frame(maxWidth: .infinity)
+                            }
+                            Button { app.incoming = .files([], className: l.class, lecture: (l.id, l.displayTitle)) } label: {
+                                Label("Add files", systemImage: "doc.viewfinder").frame(maxWidth: .infinity)
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.large)
                     }
                 }
             }
@@ -51,6 +61,16 @@ struct LectureView: View {
         .titleOnScroll(l?.displayTitle ?? "", after: 170)
         .toolbar {
             if let l {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button { app.incoming = .handwriting(className: l.class, lecture: (l.id, l.displayTitle)) } label: {
+                            Label("Write notes", systemImage: "pencil.and.scribble")
+                        }
+                        Button { app.incoming = .files([], className: l.class, lecture: (l.id, l.displayTitle)) } label: {
+                            Label("Add files or scan pages", systemImage: "doc.viewfinder")
+                        }
+                    } label: { Image(systemName: "plus") }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     ShareLink(item: shareText(l)) { Image(systemName: "square.and.arrow.up") }
                 }

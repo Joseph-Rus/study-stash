@@ -47,7 +47,29 @@ targets:
         # isn't set up. Tailscale encrypts that traffic itself.
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
-        UIBackgroundModes: [audio]
+        UIBackgroundModes: [audio, fetch]
+        # Opened from another app's share sheet: recordings, PDFs and photos, and GoodNotes notebooks.
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: Recording
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes: [public.audio, public.mpeg-4-audio, com.apple.m4a-audio, public.mp3, com.microsoft.waveform-audio]
+          - CFBundleTypeName: Document
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes: [com.adobe.pdf, public.image, public.presentation, org.openxmlformats.presentationml.presentation]
+          - CFBundleTypeName: GoodNotes notebook
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes: [app.studystash.goodnotes]
+        UTImportedTypeDeclarations:
+          - UTTypeIdentifier: app.studystash.goodnotes
+            UTTypeDescription: GoodNotes notebook
+            UTTypeConformsTo: [public.data, public.zip-archive]
+            UTTypeTagSpecification:
+              public.filename-extension: [goodnotes]
+        LSSupportsOpeningDocumentsInPlace: false
+        BGTaskSchedulerPermittedIdentifiers: [app.studystash.ios.refresh]
   StudyStashTests:
     type: bundle.unit-test
     platform: iOS

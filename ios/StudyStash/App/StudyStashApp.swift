@@ -68,10 +68,25 @@ struct MainTabs: View {
         .sheet(isPresented: Binding(get: { app.showingRecorder }, set: { app.showingRecorder = $0 })) {
             RecordView(startClass: app.recordFor)
         }
+        .sheet(item: Binding(get: { app.incoming }, set: { app.incoming = $0 })) { incoming in
+            switch incoming {
+            case let .files(files, cls, lecture): AddFilesView(className: cls, lecture: lecture, files: files)
+            case .audio(let file): ImportAudioView(file: file)
+            case .goodnotes(let url): GoodNotesImportView(url: url)
+            case let .handwriting(cls, lecture): HandwritingView(className: cls, lecture: lecture).interactiveDismissDisabled()
+            }
+        }
+        .onOpenURL { app.open($0) }
         .task {
             upcoming = try? await app.api?.upcoming()
             #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("-record") { app.record(for: app.classNow(upcoming)) }
+            if let path = DebugLaunch.value("-open-file") { app.open(URL(fileURLWithPath: path)) }
+            if let dir = DebugLaunch.value("-export-notebooks") {
+                for n in NotebookStore.shared.notebooks {
+                    try? NotebookStore.shared.pdfData(n).write(to: URL(fileURLWithPath: dir).appending(path: "\(n.title).pdf"))
+                }
+            }
             #endif
         }
     }
@@ -133,7 +148,7 @@ enum DebugLaunch {
             app.paired(base: base, library: me.library)
             return
         }
-        guard let address = value("-pair"), let code = value("-pair", 2), app.phase == .unpaired else { return }
+        guard let address = value("-pair"), let code = value("-pair", 2) else { return }
         for base in LibraryAddress.candidates(from: address) {
             let api = APIClient(base: base, session: AppModel.session)
             guard let me = try? await api.me() else { continue }
