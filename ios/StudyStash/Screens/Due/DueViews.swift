@@ -246,16 +246,13 @@ extension DueBook {
 /// Due: what's most pressing in a sentence, and the calendar.
 struct DueTab: View {
     @Environment(AppModel.self) private var app
-    @State private var path: [Route] = []
 
     var body: some View {
-        NavigationStack(path: $path) {
+        NavigationStack(path: app.stack(.due)) {
             if let api = app.api {
-                DuePage(api: api) { path.append($0) }.routes()
+                DuePage(api: api) { app.stack(.due).wrappedValue.append($0) }.routes()
             }
         }
-        // FLOWS: after the merge, this stack listens for its own pending route (app.go(_, tab: .due)) as the
-        // foundation's other stacks do.
     }
 }
 
