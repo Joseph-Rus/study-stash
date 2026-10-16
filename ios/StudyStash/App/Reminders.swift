@@ -27,16 +27,27 @@ enum Reminders {
         }
     }
 
-    /// Ask once, and say what Record does.
-    static func setUp() async {
-        #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("-quiet") { return }
-        #endif
+    /// The Record button on a class starting: registered on every launch, asking nothing.
+    static func registerActions() {
         let record = UNNotificationAction(identifier: "record", title: "Record", options: [.foreground])
         center.setNotificationCategories([
             UNNotificationCategory(identifier: Kind.classStart.rawValue, actions: [record], intentIdentifiers: []),
         ])
+    }
+
+    /// Ask to send notifications, once, where the reason has just been said (setup's last step, "Get a reminder
+    /// when a class starts"); never cold at launch.
+    static func setUp() async {
+        registerActions()
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-quiet") { return }
+        #endif
         _ = try? await center.requestAuthorization(options: [.alert, .sound, .badge])
+    }
+
+    /// Whether this phone has been asked yet (setup shows "Get a reminder when a class starts" until it has).
+    static func asked() async -> Bool {
+        await center.notificationSettings().authorizationStatus != .notDetermined
     }
 
     /// Every class start and due reminder from what the library said last, replacing those scheduled before.

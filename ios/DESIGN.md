@@ -252,11 +252,59 @@ Nouns: `app.noun(of: cls)` "lecture" / "meeting" / "recording" (a class in Class
 `Nouns.section(noun)` "Lectures"; `Nouns.untitled(folder:date:)` "Recording, Sat 10 Oct at 4:12 PM". Mixed lists
 say "notes" ("Ask anything about your notes"). The library now sends a class's `group` (`ClassInfo.group`).
 
+## Going places, recording, attaching (`App/AppModel.swift`, `App/StudyStashApp.swift`)
+
+The plan these serve is `iphone-look-refs/FLOWS.md`.
+
+```swift
+// Tabs: Home, Due (school only), Ask, Search; an iPad's sidebar adds each class (TabID.folder(name)) under its group,
+// and Coming up at its foot. Settings is a page: NavigationLink(value: Route.settings) on Home's toolbar.
+enum TabID { case home, due, ask, search, folder(String) }
+NavigationStack(path: app.stack(.due)) { … .routes() }        // each tab's stack lives in the app model
+
+// Routes (push with NavigationLink(value:), or from anywhere with app.go)
+Route.lecture(id)  /  Route.lecture(id, at: 312)               // at: open on Transcript at that second
+Route.classDetail(name), .assignment(class:id:), .search(q), .recording(id) /* on this phone */, .settings
+@Environment(\.lectureMoment) var at                           // the lecture page reads its `at` here
+
+app.go(.lecture(id, at: s.at), tab: .home, root: false)        // close what's presented, pick the tab, push
+app.go(to: .home)                                              // a tab at its first page
+app.showDue(class: "Calculus II")                              // Due, filtered (app.dueFilter)
+.onChange(of: app.dismissal) { asking = false }                // a page's own sheet closes when app.go runs
+
+// Record: one Record bar above the tabs (off on Ask and on pages that hide it)
+.recordsInto(cls)              // this page is about cls: the bar says "Record Calculus II" and records into it
+.hidesRecordBar()              // the lecture page (with .toolbar(.hidden, for: .tabBar))
+app.recordClass, app.recordWords    // where Record records now; "Record Calculus II" / "Record"
+app.record(for: cls, title: "Calculus II, Fri 16 Oct")         // open the recorder (title: a working title)
+app.recordTitle                // what RecordView starts with
+app.recordingFinished(id: recording.id, sent: true)            // after Stop / Import: the lecture (being written),
+                                                               // or .recording(id) when it stayed on this phone
+app.upcoming                   // the calendar as the library last said
+
+// Attach: the one chooser
+app.incoming = .attach(className: cls, lecture: (id, title))   // AddFilesView(className:lecture:) for now
+
+// Links into the app (widgets, Live Activity, notifications): studystash://…, made with AppLink (Shared/AppLink.swift)
+AppLink.lecture(id, at: 312), .folder(name), .assignment(class:id:), .record(class:), .recording, .due, .ask, .home
+```
+
+Notifications: a class starting opens Home; its **Record** button records it; notes ready opens the lecture; due work
+opens the assignment on Due. Spotlight opens the lecture. Notifications are asked for once, by setup's last step
+(`Reminders.setUp()`, with the reason said; `Reminders.asked()` tells whether it has been), never at launch.
+"What it's for" is a step of setup; a library never told shows a row on Home (`app.needsUses`), never a sheet.
+
+The API client (`API/APIClient.swift`) has everything the pages need to change a lecture, and the demo library
+answers each: `api.move(lecture:to:)` ("Unsorted" for none), `api.rename(lecture:title:)` (409 while its notes are
+being written), `api.delete(lecture:)` (returns the minutes Undo has) and `api.restore(lecture:)` (Undo),
+`api.rewrite(lecture:)` (write the notes again), `api.search(_:class:limit:)`. `Lecture.typed` is what the student
+typed while it recorded; the notes mark those lines `==like this==` (the lecture lane draws them as theirs).
+
 ## What changed underneath (decisions every lane should know)
 
-- The first tab is **Home** (`home` icon), as the desktop's sidebar says; Due is `event_upcoming`, Ask `chat`,
-  Settings `settings`, Search `search`. Their screens' own titles are the page lanes' (the desktop's Home is titled
-  with the date).
+- The tabs are **Home** (`home`), **Due** (`event_upcoming`), **Ask** (`chat`) and **Search** (`search`), as the
+  desktop's sidebar; Settings is pushed from Home's toolbar (`settings` icon). Their screens' own titles are the page
+  lanes' (the desktop's Home is titled with the date).
 - `ColourTheme` and its picker are gone (Settings' Colour section was removed so it compiles; the settings lane adds
   Appearance). Nothing non-visual needed it.
 - Widgets: `Glance.Event.color` and `Glance.Due.color` now hold a highlighter's name (`"blue"`), not a hex: draw it with
@@ -289,10 +337,11 @@ say "notes" ("Ask anything about your notes"). The library now sends a class's `
 `DebugLaunch` in `App/StudyStashApp.swift`; always with `-demo` (the demo library in the app; never pair with a real
 one) and `-quiet` (no notification prompt):
 
-- `-tab home|due|ask|settings|search`; `-search <words>` (Search with them typed)
-- `-open lecture:<id>` (`demo-calc-ibp`, `demo-psych-memory`, `demo-chem-sn`, `demo-unsorted-study-group`),
-  `-open class:<name>` (`Calculus II`, `Intro to Psychology`, `Organic Chemistry`), `-open assignment:<class>:<id>`
-  (`Calculus II:1`), `-open search:<words>`; `-pane notes|transcript|files` for a lecture
+- `-tab home|due|ask|search` (`settings` pushes Settings on Home); `-search <words>` (Search with them typed)
+- `-open lecture:<id>` (`demo-calc-ibp`, `demo-psych-memory`, `demo-psych-sleep` being written, `demo-chem-sn`,
+  `demo-unsorted-study-group`), `-open class:<name>` (`Calculus II`, `Intro to Psychology`, `Organic Chemistry`),
+  `-open assignment:<class>:<id>` (`Calculus II:1`; `5` is Missing, `4` due tonight, `6` handed in),
+  `-open search:<words>`, `-open recording:<id>`, `-open settings`; `-pane notes|transcript|files` for a lecture
 - `-show record` (records made-up lines; `-stop-after 3` for the sent screen), `ask`, `ask:lecture:<id>`,
   `ask:class:<name>`, `add-files`, `import-audio`, `goodnotes`, `handwriting` (a new notebook each time), `notebook`,
   `study:<id>`, `quiz:<id>`, `uses`, `widgets` (`WidgetGallery`, in `Shared/WidgetGallery.swift`), `components:1…4`
@@ -300,8 +349,13 @@ one) and `-quiet` (no notification prompt):
 - `-ask "<question>"` with `-tab ask`; `-unpaired` (setup, no `-demo`), with `-pair-code` its second step
 - Your own: read `DebugLaunch.flag("-x")` / `DebugLaunch.value("-x")` in your own file.
 
-The demo library: three classes (Calculus II yellow, Intro to Psychology green, Organic Chemistry orange), four notes
-(one unsorted, untitled), three assignments, three events.
+The demo library: three classes (Calculus II yellow, Intro to Psychology green, Organic Chemistry orange); five notes:
+one being written today (`demo-psych-sleep`, with typed lines), one with the student's own lines marked
+(`demo-calc-ibp`), one unsorted and untitled; work due tonight (Quiz 4), this week, later, one Missing (Problem Set 5)
+and one handed in; Calculus II starting in 9 minutes (so Up next says "In 9 minutes" and the Record bar "Record
+Calculus II"), then events tomorrow and after. Study makes each lecture's own flashcards and quiz; search passages
+carry the second they were said; Move to, Rename, Delete and Undo work while the app runs; a recording sent from the
+phone is "being written" for 30 seconds, then has notes round its typed lines.
 
 ## Pictures
 

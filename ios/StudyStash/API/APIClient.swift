@@ -200,6 +200,43 @@ final class APIClient: Sendable {
         try await get("/search", query: ["q": q, "class": cls, "limit": limit.map(String.init)])
     }
 
+    // MARK: changing a lecture (the desktop's Move to, Rename, Delete with Undo, Write the notes again)
+
+    /// File a lecture in another class ("Unsorted" for none). The lecture as it is now.
+    func move(lecture id: String, to cls: String) async throws -> Lecture {
+        struct Body: Encodable { var `class`: String }
+        return try await post("/lectures/\(Self.segment(id))/class", Body(class: cls))
+    }
+
+    /// A title of the student's own, kept whatever writes its notes again. The lecture as it is now. 409 while the
+    /// library is still writing its notes (the library's words say so).
+    func rename(lecture id: String, title: String) async throws -> Lecture {
+        struct Body: Encodable { var title: String }
+        return try await post("/lectures/\(Self.segment(id))/title", Body(title: title))
+    }
+
+    /// Delete a lecture: it waits in the library's trash for `restore` (Undo) for the minutes this returns.
+    @discardableResult
+    func delete(lecture id: String) async throws -> Int {
+        struct Reply: Decodable { var undo_minutes: Int? }
+        let (data, _) = try await send(request("DELETE", "/lectures/\(Self.segment(id))"))
+        return (try? Self.decoder.decode(Reply.self, from: data))?.undo_minutes ?? 10
+    }
+
+    /// Undo a delete, while it's still in the trash.
+    func restore(lecture id: String) async throws {
+        struct Empty: Encodable {}
+        struct Any_: Decodable {}
+        let _: Any_ = try await post("/lectures/\(Self.segment(id))/restore", Empty())
+    }
+
+    /// Write a lecture's notes again (after they failed): it's queued, and its status says how it goes.
+    func rewrite(lecture id: String) async throws {
+        struct Empty: Encodable {}
+        struct Any_: Decodable {}
+        let _: Any_ = try await post("/lectures/\(Self.segment(id))/rewrite", Empty())
+    }
+
     // MARK: asking
 
     struct AskBody: Encodable { var question: String; var lecture: String?; var `class`: String?; var stream = true }

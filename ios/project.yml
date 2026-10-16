@@ -83,6 +83,11 @@ targets:
             UTTypeTagSpecification:
               public.filename-extension: [goodnotes]
         LSSupportsOpeningDocumentsInPlace: false
+        # studystash://lecture/<id>?at=…, record, recording, class/<name>, due, assignment/<class>/<id>, ask, home:
+        # where widgets, the Live Activity and notifications open the app (AppLink).
+        CFBundleURLTypes:
+          - CFBundleURLName: app.studystash.ios
+            CFBundleURLSchemes: [studystash]
         BGTaskSchedulerPermittedIdentifiers: [app.studystash.ios.refresh]
   StudyStashWidgets:
     type: app-extension

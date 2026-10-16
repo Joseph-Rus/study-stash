@@ -84,6 +84,7 @@ struct MainTabs: View {
     #if DEBUG
     @State private var debugSheet: DebugScreen?
     @State private var debugCover: DebugScreen?
+    @State private var debugUses = DebugLaunch.flag("-uses") || DebugLaunch.value("-show") == "uses"
     #endif
 
     var body: some View {
@@ -94,13 +95,29 @@ struct MainTabs: View {
             if app.forSchool { Tab("Due", image: "event_upcoming", value: TabID.due) { DueTab() } }
             Tab("Ask", image: "chat", value: TabID.ask) { AskTab() }
             Tab("Search", image: "search", value: TabID.search, role: .search) { SearchTab() }
+            // An iPad's sidebar: each class under its group, as the desktop's sidebar (not in a phone's tab bar).
+            ForEach(app.folderGroups) { group in
+                TabSection(group.name) {
+                    ForEach(group.classes) { c in
+                        Tab(value: TabID.folder(c.name)) {
+                            NavigationStack(path: app.stack(.folder(c.name))) { ClassView(name: c.name).routes() }
+                        } label: {
+                            Label { Text(c.name) } icon: { Image(uiImage: SwatchImage.of(app.hue(of: c.name))) }
+                        }
+                    }
+                }
+                .tabPlacement(.sidebarOnly)
+            }
         }
         .tabViewStyle(.sidebarAdaptable)
+        .tabViewSidebarBottomBar { SidebarFooter() }
         .tabBarMinimizeBehavior(.onScrollDown)
         .modifier(RecordBar(enabled: app.tab != .ask && !app.recordBarHidden))
-        .sheet(isPresented: Binding(get: { (app.needsUses || DebugLaunch.flag("-uses") || DebugLaunch.value("-show") == "uses") && app.phase == .ready && !app.askedUses }, set: { if !$0 { app.askedUses = true } })) {
-            UsesView(onboarding: true)
-        }
+        #if DEBUG
+        // What it's for is a step of setup, or a row on Home for a library never told: never a sheet at launch. This
+        // one is only for pictures (`-show uses`).
+        .sheet(isPresented: $debugUses) { UsesView(onboarding: true) }
+        #endif
         .sheet(isPresented: $app.showingRecorder) {
             RecordView(startClass: app.recordFor)
         }
@@ -142,8 +159,8 @@ struct MainTabs: View {
             RecordingControl.stop = { [app] in await Recorder.shared.stop(api: app.api) }
             RecordingControl.togglePause = { Recorder.shared.phase == .paused ? Recorder.shared.resume() : Recorder.shared.pause() }
             RecordingControl.start = { [app] in app.record(for: app.recordClass) }
-            // Notifications are asked for after "What's it for?", not on top of it.
-            if !app.needsUses && !DebugLaunch.flag("-uses") { Task { await Reminders.setUp() } }
+            // Notifications are asked for in setup's last step, with the reason said; here only their Record button.
+            Reminders.registerActions()
             if let u = try? await app.api?.upcoming() { app.upcoming = u }
             await app.refreshInBackground()
             #if DEBUG

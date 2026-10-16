@@ -136,8 +136,13 @@ final class AppModel {
         if let all = try? await api.lectures(limit: 500) { SpotlightIndex.index(all) }
     }
 
-    /// A file another app handed over ("Open in Study Stash" / the share sheet).
+    /// A link to a place in the app (`studystash://…`, `AppLink`), or a file another app handed over ("Open in Study
+    /// Stash", the share sheet).
     func open(_ url: URL) {
+        if let link = AppLink.parts(url) {
+            follow(link)
+            return
+        }
         if url.pathExtension.lowercased() == "goodnotes" {
             incoming = .goodnotes(url)
             return
@@ -147,6 +152,22 @@ final class AppModel {
     }
 
     // MARK: recording: where Record records, starting, after Stop
+
+    /// Where a `studystash://` link goes.
+    private func follow(_ link: (place: String, path: [String], query: [String: String])) {
+        let p = link.path
+        switch link.place {
+        case "record": record(for: link.query["class"] ?? recordClass)
+        case "recording": if Recorder.shared.isActive { showingRecorder = true } else { go(to: .home) }
+        case "lecture" where !p.isEmpty: go(.lecture(p[0], at: link.query["at"].flatMap(Double.init)), tab: .home, root: true)
+        case "class" where !p.isEmpty: go(.classDetail(p[0]), tab: .home, root: true)
+        case "due": go(to: forSchool ? .due : .home)
+        case "assignment" where p.count >= 2:
+            if let id = Int(p[1]) { go(.assignment(class: p[0], id: id), tab: forSchool ? .due : .home, root: true) }
+        case "ask": go(to: .ask)
+        default: go(to: .home)
+        }
+    }
 
     /// The recording screen is up; `recordFor` is the class it starts with, `recordTitle` its title (from an event:
     /// "Calculus II, Fri 16 Oct"; "" for none).

@@ -94,13 +94,15 @@ struct Lecture: Codable, Sendable {
     var summary: String
     var topics: [String]
     var notes: String
+    /// What the student typed while it recorded, as they typed it (the notes mark those lines ==like this==).
+    var typed: String?
     var transcript: String
     var error: String?
     /// That reason in a sentence, when no notes will be written ("This lecture is too short for notes…").
     var noNotesWhy: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, title, `class`, date, seconds, owner, status, summary, topics, notes, transcript, error
+        case id, title, `class`, date, seconds, owner, status, summary, topics, notes, typed, transcript, error
         case noNotesWhy = "no_notes_why"
     }
 
