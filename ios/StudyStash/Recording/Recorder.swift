@@ -91,7 +91,9 @@ final class Recorder {
             return
         }
         let id = Recording.newID()
-        var r = Recording(id: id, started: .now, className: className, title: title, titleTyped: !title.isEmpty)
+        // A title handed in is a working one (an event's, "Calculus II, Fri 16 Oct"), as the desktop's: the library
+        // still names the lecture from what's said unless the student types a title of their own.
+        var r = Recording(id: id, started: .now, className: className, title: title, titleTyped: false)
         do {
             let session = AVAudioSession.sharedInstance()
             try session.setCategory(.playAndRecord, mode: .spokenAudio, options: [.allowBluetoothHFP, .defaultToSpeaker, .mixWithOthers])
