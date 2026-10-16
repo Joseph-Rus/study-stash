@@ -4,18 +4,11 @@ import SwiftUI
 /// lectures, and every class as a tile. + records, imports a voice memo, or adds files.
 struct LibraryTab: View {
     @Environment(AppModel.self) private var app
-    @State private var path: NavigationPath = DebugLaunch.route.map { NavigationPath([$0]) } ?? NavigationPath()
-
     var body: some View {
-        NavigationStack(path: $path) {
+        NavigationStack(path: app.stack(.home)) {
             if let api = app.api {
-                LibraryHome(api: api, path: $path).routes()
+                LibraryHome(api: api, path: app.stack(.home)).routes()
             }
-        }
-        .onChange(of: app.pendingRoute) { _, r in
-            guard let r else { return }
-            path.append(r)
-            app.pendingRoute = nil
         }
     }
 }
@@ -65,6 +58,9 @@ private struct LibraryHome: View {
         .navigationTitle("Library")
         .navigationSubtitle(app.libraryName)
         .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                NavigationLink(value: Route.settings) { Image(icon: "settings") }.accessibilityLabel("Settings")
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Button { app.record(for: nil) } label: { Label(app.words.record, systemImage: "mic.fill") }

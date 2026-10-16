@@ -30,12 +30,23 @@ struct StudyStashApp: App {
     }
 }
 
-/// Where a tap goes inside a tab.
+/// Where a tap goes inside a tab: push one with `NavigationLink(value:)`, or from anywhere with `app.go(_:tab:root:)`.
 enum Route: Hashable {
     case classDetail(String)
-    case lecture(String)
+    /// A lecture; with `at`, opened on its transcript at that second (`@Environment(\.lectureMoment)`).
+    case lecture(String, at: Double? = nil)
     case assignment(class: String, id: Int)
     case search(String)
+    /// A recording on this phone that hasn't reached the library (its id).
+    case recording(String)
+    /// Settings, pushed from Home's toolbar.
+    case settings
+}
+
+extension EnvironmentValues {
+    /// The second a lecture page opens at (on its transcript), when it was opened from a moment: an Ask source or a
+    /// search passage. Nil opens it at the top.
+    @Entry var lectureMoment: Double? = nil
 }
 
 struct RootView: View {
@@ -65,36 +76,37 @@ struct RootView: View {
     }
 }
 
+/// The tabs (Home, Due, Ask, Search), the Record bar above them, and what the app presents over everything.
 struct MainTabs: View {
-    enum TabID: Hashable { case library, due, ask, settings, search }
+    /// The tabs, by the name pages used before.
+    typealias TabID = StudyStash.TabID
     @Environment(AppModel.self) private var app
-    @State private var tab: TabID = DebugLaunch.tab ?? .library
-    @State private var upcoming: Upcoming? = ResponseCache.shared.read("upcoming", as: Upcoming.self)
     #if DEBUG
     @State private var debugSheet: DebugScreen?
     @State private var debugCover: DebugScreen?
     #endif
 
     var body: some View {
-        TabView(selection: $tab) {
-            // The desktop's names and icons: Home and Due as its sidebar has them.
-            Tab("Home", image: "home", value: .library) { LibraryTab() }
-            if app.forSchool { Tab("Due", image: "event_upcoming", value: .due) { DueTab() } }
-            Tab("Ask", image: "chat", value: .ask) { AskTab() }
-            Tab("Settings", image: "settings", value: .settings) { SettingsTab() }
-            Tab("Search", image: "search", value: .search, role: .search) { SearchTab() }
+        @Bindable var app = app
+        TabView(selection: $app.tab) {
+            // The desktop's names and icons: Home and Due as its sidebar has them. Settings is on Home's toolbar.
+            Tab("Home", image: "home", value: TabID.home) { LibraryTab() }
+            if app.forSchool { Tab("Due", image: "event_upcoming", value: TabID.due) { DueTab() } }
+            Tab("Ask", image: "chat", value: TabID.ask) { AskTab() }
+            Tab("Search", image: "search", value: TabID.search, role: .search) { SearchTab() }
         }
         .tabViewStyle(.sidebarAdaptable)
         .tabBarMinimizeBehavior(.onScrollDown)
-        .tabViewBottomAccessory { RecordAccessory(classNow: app.classNow(upcoming)) }
+        .modifier(RecordBar(enabled: app.tab != .ask && !app.recordBarHidden))
         .sheet(isPresented: Binding(get: { (app.needsUses || DebugLaunch.flag("-uses") || DebugLaunch.value("-show") == "uses") && app.phase == .ready && !app.askedUses }, set: { if !$0 { app.askedUses = true } })) {
             UsesView(onboarding: true)
         }
-        .sheet(isPresented: Binding(get: { app.showingRecorder }, set: { app.showingRecorder = $0 })) {
+        .sheet(isPresented: $app.showingRecorder) {
             RecordView(startClass: app.recordFor)
         }
-        .sheet(item: Binding(get: { app.incoming }, set: { app.incoming = $0 })) { incoming in
+        .sheet(item: $app.incoming) { incoming in
             switch incoming {
+            case let .attach(cls, lecture): AddFilesView(className: cls, lecture: lecture)
             case let .files(files, cls, lecture): AddFilesView(className: cls, lecture: lecture, files: files)
             case .audio(let file): ImportAudioView(file: file)
             case .goodnotes(let url): GoodNotesImportView(url: url)
@@ -116,20 +128,26 @@ struct MainTabs: View {
         #endif
         .onOpenURL { app.open($0) }
         .onContinueUserActivity(CSSearchableItemActionType) { activity in
-            if let id = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String { app.pendingRoute = .lecture(id) }
+            if let id = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String { app.go(.lecture(id), root: true) }
         }
-        .onChange(of: app.pendingRoute) { _, r in if r != nil { tab = .library } }
         .task {
+            #if DEBUG
+            if let r = DebugLaunch.route {
+                var t = Transaction()
+                t.disablesAnimations = true
+                withTransaction(t) { app.go(r) }
+            }
+            #endif
             // Pause, Stop and Record from the lock screen, Control Center and Siri.
             RecordingControl.stop = { [app] in await Recorder.shared.stop(api: app.api) }
             RecordingControl.togglePause = { Recorder.shared.phase == .paused ? Recorder.shared.resume() : Recorder.shared.pause() }
-            RecordingControl.start = { [app] in app.record(for: app.classNow(ResponseCache.shared.read("upcoming", as: Upcoming.self))) }
+            RecordingControl.start = { [app] in app.record(for: app.recordClass) }
             // Notifications are asked for after "What's it for?", not on top of it.
             if !app.needsUses && !DebugLaunch.flag("-uses") { Task { await Reminders.setUp() } }
-            upcoming = try? await app.api?.upcoming()
+            if let u = try? await app.api?.upcoming() { app.upcoming = u }
             await app.refreshInBackground()
             #if DEBUG
-            if DebugLaunch.simulatesRecording { app.record(for: app.classNow(upcoming)) }
+            if DebugLaunch.simulatesRecording { app.record(for: app.recordClass) }
             switch DebugLaunch.show {
             case .addFiles: app.incoming = .files(DebugSamples.files(), className: "Calculus II", lecture: nil)
             case .importAudio: app.incoming = .audio(DebugSamples.audio())
@@ -150,15 +168,32 @@ struct MainTabs: View {
     }
 }
 
+/// Record, above the tabs on every tab but Ask: "Record Calculus II" (the page's class, else the one on now), or
+/// "Record"; while recording, the recording. Hidden on pages that hide the tab bar.
+private struct RecordBar: ViewModifier {
+    var enabled: Bool
+    @Environment(AppModel.self) private var app
+
+    func body(content: Content) -> some View {
+        if #available(iOS 26.1, *) {
+            content.tabViewBottomAccessory(isEnabled: enabled) { RecordAccessory(classNow: app.recordClass) }
+        } else {
+            content.tabViewBottomAccessory { RecordAccessory(classNow: app.recordClass) }
+        }
+    }
+}
+
 /// The destinations every tab's stack can push.
 struct RouteDestinations: ViewModifier {
     func body(content: Content) -> some View {
         content.navigationDestination(for: Route.self) { route in
             switch route {
             case .classDetail(let name): ClassView(name: name)
-            case .lecture(let id): LectureView(id: id)
+            case let .lecture(id, at): LectureView(id: id).environment(\.lectureMoment, at)
             case let .assignment(cls, id): AssignmentView(className: cls, id: id)
             case .search(let q): SearchResultsView(query: q)
+            case .recording(let id): PhoneRecordingView(id: id)
+            case .settings: SettingsTab()
             }
         }
     }
@@ -172,8 +207,10 @@ extension View {
 /// with and no one to tap. Every screen can be opened from them; ios/DESIGN.md lists them all.
 /// - `-demo` uses the demo library in the app; `-unpaired` forgets any library and shows setup (pairing), and with
 ///   `-pair-code` its second step; `-pair <address> <code>` pairs; `-library <address>` uses a library with no password.
-/// - `-tab home|due|ask|settings|search` opens a tab; `-search <words>` opens Search with them typed.
-/// - `-open lecture:<id>`, `class:<name>`, `assignment:<class>:<id>` or `search:<words>` pushes that screen on Home;
+/// - `-tab home|due|ask|search` opens a tab (`settings` pushes Settings on Home); `-search <words>` opens Search
+///   with them typed.
+/// - `-open lecture:<id>`, `class:<name>`, `assignment:<class>:<id>`, `search:<words>`, `recording:<id>` or
+///   `settings` pushes that screen on Home (through `app.go`);
 ///   `-pane notes|transcript|files` picks a lecture's tab.
 /// - `-show <screen>` opens a sheet: `record`, `ask`, `ask:lecture:<id>`, `ask:class:<name>`, `add-files`,
 ///   `import-audio`, `goodnotes`, `handwriting`, `notebook`, `study:<id>`, `quiz:<id>`, `uses`, `widgets`.
@@ -201,22 +238,24 @@ enum DebugLaunch {
         #endif
     }
 
-    static var tab: MainTabs.TabID? {
+    static var tab: TabID? {
         switch value("-tab") {
-        case "home", "library": .library
+        case "home", "library", "settings": .home
         case "due": .due
         case "ask": .ask
-        case "settings": .settings
         case "search": .search
         default: value("-search") != nil ? .search : nil
         }
     }
 
     static var route: Route? {
+        if value("-tab") == "settings" { return .settings }
         guard let v = value("-open") else { return nil }
         if v.hasPrefix("lecture:") { return .lecture(String(v.dropFirst(8))) }
         if v.hasPrefix("class:") { return .classDetail(String(v.dropFirst(6))) }
         if v.hasPrefix("search:") { return .search(String(v.dropFirst(7))) }
+        if v.hasPrefix("recording:") { return .recording(String(v.dropFirst(10))) }
+        if v == "settings" { return .settings }
         if v.hasPrefix("assignment:"), let colon = v.lastIndex(of: ":"), let id = Int(v[v.index(after: colon)...]) {
             return .assignment(class: String(v[v.index(v.startIndex, offsetBy: 11)..<colon]), id: id)
         }

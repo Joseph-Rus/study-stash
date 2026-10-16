@@ -13,7 +13,8 @@ struct SettingsTab: View {
     }
 
     var body: some View {
-        NavigationStack {
+        // Pushed from Home's toolbar (Route.settings), inside Home's stack.
+        Group {
             Form {
                 Section("Library") {
                     LabeledContent {
