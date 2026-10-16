@@ -44,7 +44,7 @@ private struct LibraryHome: View {
             LazyVStack(alignment: .leading, spacing: 14) {
                 if library.stale || recent.stale { OfflineNote().frame(maxWidth: .infinity) }
                 if let writing = library.value?.writing, writing > 0 {
-                    Label("Writing notes for \(writing) lecture\(writing == 1 ? "" : "s")…", systemImage: "sparkles")
+                    Label("Writing notes for \(writing) \(writing == 1 ? app.words.lecture : app.words.lectures)…", systemImage: "sparkles")
                         .font(.subheadline.weight(.medium))
                         .foregroundStyle(.tint)
                         .symbolEffect(.pulse)
@@ -67,7 +67,7 @@ private struct LibraryHome: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
-                    Button { app.record(for: nil) } label: { Label("Record a lecture", systemImage: "mic.fill") }
+                    Button { app.record(for: nil) } label: { Label(app.words.record, systemImage: "mic.fill") }
                     Button { app.incoming = .handwriting(className: nil, lecture: nil) } label: { Label("Write notes", systemImage: "pencil.and.scribble") }
                     Button { app.incoming = .files([], className: nil, lecture: nil) } label: { Label("Add files or scan pages", systemImage: "doc.viewfinder") }
                     Button { app.incoming = .audio(nil) } label: { Label("Import a recording", systemImage: "waveform") }
@@ -163,7 +163,7 @@ private struct LibraryHome: View {
 
     @ViewBuilder private var recentSection: some View {
         if let lectures = recent.value, !lectures.isEmpty {
-            SectionHeading(title: "Recent lectures")
+            SectionHeading(title: "Recent \(app.words.lectures)")
             Card(padding: 0) {
                 VStack(spacing: 0) {
                     ForEach(Array(lectures.enumerated()), id: \.element.id) { i, l in
@@ -189,7 +189,7 @@ private struct LibraryHome: View {
                 ContentUnavailableView("Nothing here yet", systemImage: "books.vertical",
                                        description: Text("Record a lecture with Study Stash on your computer, and it shows up here with notes."))
             } else {
-                SectionHeading(title: "Classes")
+                SectionHeading(title: app.words.classes)
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 158), spacing: 12)], spacing: 12) {
                     ForEach(overview.classes) { c in
                         NavigationLink(value: Route.classDetail(c.name)) {

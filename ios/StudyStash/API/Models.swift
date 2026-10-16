@@ -44,10 +44,14 @@ struct LibraryOverview: Codable, Sendable {
     var writing: Int
     var ask: Bool
     var notesModel: String?
+    /// What it's for ("student", "work", ...); empty until asked, nil from a library before it was asked.
+    var uses: [String]?
+    var forSchool: Bool?
 
     enum CodingKeys: String, CodingKey {
-        case name, version, classes, unsorted, writing, ask
+        case name, version, classes, unsorted, writing, ask, uses
         case notesModel = "notes_model"
+        case forSchool = "for_school"
     }
 }
 

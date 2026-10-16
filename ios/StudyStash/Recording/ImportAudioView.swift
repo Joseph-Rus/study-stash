@@ -32,7 +32,7 @@ struct ImportAudioView: View {
                     } footer: {
                         Text("In Voice Memos, tap ••• → Share → Study Stash, or choose the file here.")
                     }
-                    Section("Class") { ClassPicker(selection: $className) }
+                    Section(app.words.cls.capitalized) { ClassPicker(selection: $className) }
                     Section("Title") { TextField("Named from what's said", text: $title) }
                     if let progress {
                         Section {

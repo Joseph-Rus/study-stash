@@ -51,6 +51,7 @@ final class AppModel {
         await Reminders.schedule(upcoming: u, due: d) { [weak self] e in self?.className(ofEvent: e) }
         await RecordingStore.shared.sendWaiting(api: api)
         await Reminders.checkNotes(api: api)
+        if let all = try? await api.lectures(limit: 500) { SpotlightIndex.index(all) }
     }
 
     /// A file another app handed over ("Open in Study Stash" / the share sheet).
@@ -132,6 +133,28 @@ final class AppModel {
         classIndex = Self.index(overview.classes)
         classes = overview.classes
         libraryName = overview.name
+        uses = overview.uses
+        if let s = overview.forSchool { forSchool = s }
+    }
+
+    /// What the library is for (nil: it's from before it was asked; empty: not asked yet).
+    var uses: [String]?
+    /// School (classes, Canvas, due dates), or folders for everything else.
+    var forSchool = true
+    var words: Words { Words(school: forSchool, work: uses?.contains("work") == true && !forSchool) }
+
+    /// Ask what it's for, once, when the library hasn't been told.
+    var needsUses: Bool { uses?.isEmpty == true && !askedUses }
+    var askedUses: Bool {
+        get { UserDefaults.standard.bool(forKey: "askedUses") }
+        set { UserDefaults.standard.set(newValue, forKey: "askedUses") }
+    }
+
+    func setUses(_ list: [String]) async {
+        askedUses = true
+        guard let api, let overview = try? await api.setUses(list) else { return }
+        learn(overview)
+        ResponseCache.shared.write("library", overview)
     }
 
     /// Each class by its name, its other names and its course code, as `color(of:)` and `classFor(event:)` look
@@ -151,12 +174,18 @@ final class AppModel {
     static let baseKey = "library.base"
     static let nameKey = "library.name"
 
+    /// The app's one model, for what Siri and Shortcuts ask (they run in the app's process).
+    static weak var current: AppModel?
+
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        defer { if defaults == .standard { AppModel.current = self } }
         libraryName = defaults.string(forKey: Self.nameKey) ?? "Your library"
         if let saved = ResponseCache.shared.read("library", as: LibraryOverview.self) {
             classIndex = Self.index(saved.classes)
             classes = saved.classes
+            uses = saved.uses
+            forSchool = saved.forSchool ?? true
         }
         if let s = defaults.string(forKey: Self.baseKey), let base = URL(string: s) {
             phase = .checking
@@ -231,6 +260,7 @@ final class AppModel {
         defaults.removeObject(forKey: Self.baseKey)
         defaults.removeObject(forKey: Self.nameKey)
         ResponseCache.shared.clear()
+        SpotlightIndex.clear()
         api = nil
         libraryName = "Your library"
         phase = .unpaired
@@ -243,4 +273,17 @@ enum ClassMatch {
         s.lowercased().replacingOccurrences(of: "&", with: " and ")
             .components(separatedBy: CharacterSet.alphanumerics.inverted).filter { !$0.isEmpty }.joined(separator: " ")
     }
+}
+
+/// The app's words for what it holds: classes and lectures for school; folders and recordings (meetings at work) else.
+struct Words {
+    var school: Bool
+    var work: Bool
+
+    var cls: String { school ? "class" : "folder" }
+    var classes: String { school ? "Classes" : "Folders" }
+    var anyClass: String { school ? "Any class" : "Any folder" }
+    var lecture: String { school ? "lecture" : work ? "meeting" : "recording" }
+    var lectures: String { school ? "lectures" : work ? "meetings" : "recordings" }
+    var record: String { "Record a \(lecture)" }
 }

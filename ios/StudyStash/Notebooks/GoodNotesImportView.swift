@@ -27,7 +27,7 @@ struct GoodNotesImportView: View {
                         } footer: {
                             Text("Your ink comes in as ink: keep writing on it here. Saved to your library, it's read for notes and Ask.")
                         }
-                        Section("Class") { ClassPicker(selection: $className) }
+                        Section(app.words.cls.capitalized) { ClassPicker(selection: $className) }
                     } else if let problem {
                         Label(problem, systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
                     } else {

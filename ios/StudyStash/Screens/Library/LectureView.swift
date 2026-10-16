@@ -13,6 +13,7 @@ struct LectureView: View {
     @State private var files: Resource<[Attachment]>?
     @State private var pane: Pane = .notes
     @State private var asking = false
+    @State private var studying = false
 
     var body: some View {
         let l = lecture?.value
@@ -78,15 +79,25 @@ struct LectureView: View {
         }
         .safeAreaInset(edge: .bottom) {
             if l != nil {
-                Button { asking = true } label: {
-                    Label("Ask about this lecture", systemImage: "sparkles")
-                        .font(.body.weight(.medium))
-                        .padding(.horizontal, 8).padding(.vertical, 4)
+                HStack(spacing: 10) {
+                    Button { studying = true } label: {
+                        Label("Study", systemImage: "rectangle.on.rectangle.angled")
+                            .font(.body.weight(.medium))
+                            .padding(.horizontal, 6).padding(.vertical, 4)
+                    }
+                    Button { asking = true } label: {
+                        Label("Ask", systemImage: "sparkles")
+                            .font(.body.weight(.medium))
+                            .padding(.horizontal, 6).padding(.vertical, 4)
+                    }
                 }
                 .buttonStyle(.glass)
                 .controlSize(.large)
                 .padding(.bottom, 8)
             }
+        }
+        .fullScreenCover(isPresented: $studying) {
+            if let l { StudyView(lectureID: l.id, title: l.displayTitle) }
         }
         .sheet(isPresented: $asking) {
             if let l { AskSheet(scope: .lecture(id: l.id, title: l.displayTitle)) }
@@ -100,6 +111,9 @@ struct LectureView: View {
                 files = Resource("lecture:\(id):files") { try await api.attachments(lecture: id) }
             }
             await load()
+            #if DEBUG
+            if DebugLaunch.value("-study") != nil { studying = true }
+            #endif
             if let l = lecture?.value, (notes?.value?.html ?? "").isEmpty, !l.transcript.isEmpty, l.status != "done" { pane = .transcript }
         }
     }

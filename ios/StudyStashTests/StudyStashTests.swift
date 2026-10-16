@@ -255,3 +255,19 @@ import Testing
         #expect(app.className(ofEvent: event("Lunch")) == nil)
     }
 }
+
+@Suite struct StudyDeckTests {
+    @Test func aDeckIsReadFromAnAnswerWrappedInProse() throws {
+        let text = """
+        Here you go!
+        ```json
+        {"cards":[{"front":"LR(1)?","back":"1 token of lookahead"},{"front":"","back":"dropped"}],
+         "quiz":[{"question":"Shift does?","choices":["push","pop"],"answer":0,"why":"It pushes."},{"question":"bad","choices":["a"],"answer":3}]}
+        ```
+        """
+        let d = try #require(StudyDeck.parse(text))
+        #expect(d.cards.count == 1)
+        #expect(d.quiz.count == 1 && d.quiz[0].why == "It pushes.")
+        #expect(StudyDeck.parse("No JSON here") == nil)
+    }
+}

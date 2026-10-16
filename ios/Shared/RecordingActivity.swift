@@ -61,10 +61,3 @@ enum RecordingControl {
     static var togglePause: (@MainActor () -> Void)?
     static var start: (@MainActor () -> Void)?
 }
-
-struct StudyStashShortcuts: AppShortcutsProvider {
-    static var appShortcuts: [AppShortcut] {
-        AppShortcut(intent: StartRecordingIntent(), phrases: ["Record a lecture in \(.applicationName)", "Start \(.applicationName)"],
-                    shortTitle: "Record a lecture", systemImageName: "mic.fill")
-    }
-}

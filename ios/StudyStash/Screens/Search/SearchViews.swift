@@ -33,7 +33,7 @@ struct SearchResultsView: View {
                     ContentUnavailableView.search(text: query).listRowBackground(Color.clear)
                 }
                 if !r.classes.isEmpty {
-                    Section("Classes") {
+                    Section(app.words.classes) {
                         ForEach(r.classes) { c in
                             NavigationLink(value: Route.classDetail(c.name)) {
                                 Label { Text(c.name) } icon: { ClassDot(color: ClassColor.of(c.color), size: 12) }

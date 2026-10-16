@@ -262,7 +262,7 @@ struct ClassPicker: View {
         } label: {
             HStack(spacing: 6) {
                 ClassDot(color: selection.map { app.color(of: $0) } ?? .secondary, size: 8)
-                Text(selection ?? "Any class").font(.subheadline.weight(.semibold))
+                Text(selection ?? app.words.anyClass).font(.subheadline.weight(.semibold))
                 Image(systemName: "chevron.up.chevron.down").font(.caption2.weight(.bold))
             }
             .foregroundStyle(selection.map { app.color(of: $0) } ?? .secondary)
@@ -325,7 +325,7 @@ struct RecordAccessory: View {
                     }
                 } else {
                     Image(systemName: "mic.fill").foregroundStyle(.red)
-                    Text(classNow.map { "Record \($0)" } ?? "Record a lecture").font(.subheadline.weight(.semibold)).lineLimit(1)
+                    Text(classNow.map { "Record \($0)" } ?? app.words.record).font(.subheadline.weight(.semibold)).lineLimit(1)
                     if placement != .inline { Spacer(minLength: 0) }
                 }
             }

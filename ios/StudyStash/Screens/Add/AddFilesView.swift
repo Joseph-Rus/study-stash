@@ -51,7 +51,7 @@ struct AddFilesView: View {
                     }
                 } else {
                     if lecture == nil {
-                        Section("Class") { ClassPicker(selection: $className) }
+                        Section(app.words.cls.capitalized) { ClassPicker(selection: $className) }
                     } else if let lecture {
                         Section("Lecture") { Text(lecture.title) }
                     }

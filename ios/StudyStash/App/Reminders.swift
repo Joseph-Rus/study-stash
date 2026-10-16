@@ -29,6 +29,9 @@ enum Reminders {
 
     /// Ask once, and say what Record does.
     static func setUp() async {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-quiet") { return }
+        #endif
         let record = UNNotificationAction(identifier: "record", title: "Record", options: [.foreground])
         center.setNotificationCategories([
             UNNotificationCategory(identifier: Kind.classStart.rawValue, actions: [record], intentIdentifiers: []),

@@ -30,6 +30,14 @@ struct SettingsTab: View {
                     }
                 }
 
+                Section {
+                    NavigationLink {
+                        UsesView()
+                    } label: {
+                        LabeledContent("Used for", value: (app.uses ?? []).isEmpty ? "School" : (app.uses ?? []).map { u in UsesView.kinds.first { $0.id == u }?.title ?? u }.joined(separator: ", "))
+                    }
+                }
+
                 Section("Colour") {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 44), spacing: 12)], spacing: 12) {
                         ForEach(ColourTheme.all) { t in

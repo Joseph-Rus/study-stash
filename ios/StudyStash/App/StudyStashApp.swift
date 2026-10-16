@@ -1,3 +1,4 @@
+import CoreSpotlight
 import SwiftUI
 import UserNotifications
 
@@ -68,7 +69,7 @@ struct MainTabs: View {
     var body: some View {
         TabView(selection: $tab) {
             Tab("Library", systemImage: "books.vertical", value: .library) { LibraryTab() }
-            Tab("Due", systemImage: "checklist", value: .due) { DueTab() }
+            if app.forSchool { Tab("Due", systemImage: "checklist", value: .due) { DueTab() } }
             Tab("Ask", systemImage: "sparkles", value: .ask) { AskTab() }
             Tab("Settings", systemImage: "gearshape", value: .settings) { SettingsTab() }
             Tab(value: .search, role: .search) { SearchTab() }
@@ -76,6 +77,9 @@ struct MainTabs: View {
         .tabViewStyle(.sidebarAdaptable)
         .tabBarMinimizeBehavior(.onScrollDown)
         .tabViewBottomAccessory { RecordAccessory(classNow: app.classNow(upcoming)) }
+        .sheet(isPresented: Binding(get: { (app.needsUses || DebugLaunch.value("-uses") != nil) && app.phase == .ready && !app.askedUses }, set: { if !$0 { app.askedUses = true } })) {
+            UsesView(onboarding: true)
+        }
         .sheet(isPresented: Binding(get: { app.showingRecorder }, set: { app.showingRecorder = $0 })) {
             RecordView(startClass: app.recordFor)
         }
@@ -88,13 +92,17 @@ struct MainTabs: View {
             }
         }
         .onOpenURL { app.open($0) }
+        .onContinueUserActivity(CSSearchableItemActionType) { activity in
+            if let id = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String { app.pendingRoute = .lecture(id) }
+        }
         .onChange(of: app.pendingRoute) { _, r in if r != nil { tab = .library } }
         .task {
             // Pause, Stop and Record from the lock screen, Control Center and Siri.
             RecordingControl.stop = { [app] in await Recorder.shared.stop(api: app.api) }
             RecordingControl.togglePause = { Recorder.shared.phase == .paused ? Recorder.shared.resume() : Recorder.shared.pause() }
             RecordingControl.start = { [app] in app.record(for: app.classNow(ResponseCache.shared.read("upcoming", as: Upcoming.self))) }
-            Task { await Reminders.setUp() }
+            // Notifications are asked for after "What's it for?", not on top of it.
+            if !app.needsUses && DebugLaunch.value("-uses") == nil { Task { await Reminders.setUp() } }
             upcoming = try? await app.api?.upcoming()
             await app.refreshInBackground()
             #if DEBUG
