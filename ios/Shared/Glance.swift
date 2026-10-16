@@ -139,10 +139,11 @@ extension Glance.Due {
     /// Due within the day, or missing: said in ink (or the late red).
     func isSoon(at now: Date) -> Bool { !overdue && Format.daysBetween(now, due) <= 0 }
 
-    /// "Problem Set 6 due tomorrow", for the Lock Screen's line.
+    /// The Lock Screen's line, what matters first (a long name is cut at its end): "Due tomorrow · Problem Set 6",
+    /// "Missing · Reading quiz 4".
     func sentence(at now: Date) -> String {
-        if overdue { return "\(name) is still missing" }
-        return "\(name) due \(Glance.dueDay(due, now: now))"
+        if overdue { return "Missing · \(name)" }
+        return "Due \(Glance.dueDay(due, now: now)) · \(name)"
     }
 }
 

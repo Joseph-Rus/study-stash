@@ -193,13 +193,13 @@ struct RecordingLockScreenView: View {
     var state: RecordingAttributes.ContentState
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .center, spacing: 12) {
                 RecordingStatus(state: state, clock: .atkinson(15, .medium, relativeTo: .body))
-                RecordingName(attributes: attributes)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                RecordingControls(state: state)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            RecordingControls(state: state)
+            RecordingName(attributes: attributes)
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 16)

@@ -355,28 +355,28 @@ struct UpNextLarge: View {
         let due = glance?.dueRows(at: now, count: big ? 2 : 3) ?? []
         let hot = coming.first.flatMap { $0.offersRecord(at: now) ? $0 : nil }
         VStack(alignment: .leading, spacing: 0) {
-            // Home's title and sentence: the date, then what's most pressing; Record beside them while a class is on.
-            HStack(alignment: .top, spacing: 10) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(Format.longDate(now))
-                        .font(.atkinson(22, .heavy, relativeTo: .title2)).tracking(-0.44)
-                        .lineLimit(1).minimumScaleFactor(0.8)
-                        .foregroundStyle(inks.ink)
-                        .accessibilityAddTraits(.isHeader)
-                    Text(glance?.lede(at: now) ?? UpNextWords.notYet)
-                        .textStyle(.meta).fontWeight(.regular)
-                        .foregroundStyle(inks.muted)
-                        .lineLimit(2)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+            // Home's title and sentence: the date (Record beside it while a class is on or about to start), then
+            // what's most pressing.
+            HStack(alignment: .center, spacing: 10) {
+                Text(Format.longDate(now))
+                    .font(.atkinson(22, .heavy, relativeTo: .title2)).tracking(-0.44)
+                    .lineLimit(1).minimumScaleFactor(0.8)
+                    .foregroundStyle(inks.ink)
+                    .accessibilityAddTraits(.isHeader)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 if let hot { WidgetRecordPill(className: hot.className) }
             }
+            Text(glance?.lede(at: now) ?? UpNextWords.notYet)
+                .textStyle(.meta).fontWeight(.regular)
+                .foregroundStyle(inks.muted)
+                .lineLimit(2)
+                .padding(.top, hot == nil ? 3 : 1)
 
-            WidgetHeading(text: "Up next").padding(.top, 14)
+            WidgetHeading(text: "Up next").padding(.top, 12)
             if coming.isEmpty {
                 Text(glance == nil ? UpNextWords.notYet : UpNextWords.nothingOn).textStyle(.meta).foregroundStyle(inks.muted).padding(.top, 2)
             }
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 6) {
                 ForEach(coming, id: \.self) { e in
                     HStack(alignment: .center, spacing: 12) {
                         EventWhen(event: e, now: now).frame(width: 84, alignment: .leading)
@@ -388,11 +388,11 @@ struct UpNextLarge: View {
             .padding(.top, 4)
 
             if glance != nil {
-                WidgetHeading(text: "Due").padding(.top, 14)
+                WidgetHeading(text: "Due").padding(.top, 12)
                 if due.isEmpty {
                     Text(UpNextWords.nothingDue).textStyle(.meta).foregroundStyle(inks.muted).padding(.top, 2)
                 }
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 5) {
                     ForEach(due, id: \.self) { DueTap(item: $0, now: now) }
                 }
                 .padding(.top, 4)
