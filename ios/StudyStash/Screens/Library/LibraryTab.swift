@@ -79,6 +79,7 @@ private struct LibraryHome: View {
                 .frame(maxWidth: 1040)
                 .frame(maxWidth: .infinity)
             }
+            .accessibilityIdentifier("page.home")
             .task {
                 #if DEBUG
                 if let to = DebugLaunch.value("-scrolled") ?? (DebugLaunch.flag("-scrolled") ? "notes" : nil) {

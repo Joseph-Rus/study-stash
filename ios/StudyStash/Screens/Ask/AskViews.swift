@@ -87,6 +87,21 @@ enum AskScope: Hashable, Codable, Sendable {
         case .lecture(_, _, let c): c
         }
     }
+
+    /// A lecture opened without its class: the class from what the library said last about it (its page, Home's
+    /// notes), so it's called a lecture, a meeting or a recording as its folder has it. Nil when nothing says.
+    var lectureClassSaved: String? {
+        guard case let .lecture(id, _, nil) = self else { return nil }
+        let cls = ResponseCache.shared.read("lecture:\(id)", as: Lecture.self)?.class
+            ?? ResponseCache.shared.read("home-notes", as: [LectureSummary].self)?.first { $0.id == id }?.class
+        return cls.flatMap { $0.isEmpty || $0 == "Unsorted" ? nil : $0 }
+    }
+
+    /// This scope with a lecture's class set to `cls`.
+    func inClass(_ cls: String?) -> AskScope {
+        guard case let .lecture(id, title, nil) = self, let cls else { return self }
+        return .lecture(id: id, title: title, class: cls)
+    }
 }
 
 /// A conversation with the library's AI: questions, answers streaming in, and their sources.
@@ -218,13 +233,15 @@ struct AskSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var conversation = AskConversation(saveKey: nil)
     @State private var scope: AskScope
-    private let base: AskScope
+    /// Where it was opened (a lecture's class found, when it wasn't given).
+    @State private var base: AskScope
     private let question: String?
     private let onMoment: ((_ lecture: String, _ at: Double?) -> Void)?
 
     init(scope: AskScope, question: String? = nil, onMoment: ((_ lecture: String, _ at: Double?) -> Void)? = nil) {
-        _scope = State(initialValue: scope)
-        base = scope
+        let known = scope.inClass(scope.lectureClassSaved)
+        _scope = State(initialValue: known)
+        _base = State(initialValue: known)
         self.question = question
         self.onMoment = onMoment
     }
@@ -250,6 +267,13 @@ struct AskSheet: View {
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
+        .task {
+            // A lecture's class, when it wasn't given and nothing saved says: the library's.
+            guard case let .lecture(id, _, nil) = base, let l = try? await app.api?.lecture(id),
+                  let cls = l.class, !cls.isEmpty, cls != "Unsorted" else { return }
+            if scope == base { scope = base.inClass(cls) }
+            base = base.inClass(cls)
+        }
     }
 }
 
@@ -566,6 +590,7 @@ private struct SourceRow: View {
         }
         .buttonStyle(.row)
         .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("ask.source")
         .accessibilityHint(source.times.isEmpty ? "Opens it" : "Opens it at \(Format.clock(source.times[0]))")
     }
 

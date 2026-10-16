@@ -38,6 +38,12 @@ struct LectureView: View {
     @State private var toast: PageToast?
     /// The transcript line opened at, washed for a moment.
     @State private var washed: Int?
+    /// A moment of this lecture an answer about it used, tapped in the Ask sheet: shown here.
+    @State private var jump: Moment?
+    struct Moment: Equatable {
+        var at: Double?
+        let id = UUID()
+    }
     @State private var player = TranscriptPlayer()
     /// The notebook beside the notes (iPad, or a wide window).
     @State private var inkBeside = false
@@ -64,7 +70,9 @@ struct LectureView: View {
                         .frame(maxWidth: .infinity)
                 }
                 .scrollDismissesKeyboard(.interactively)
-                .task(id: l == nil) { await openAtMoment(l, proxy) }
+                .accessibilityIdentifier("page.lecture")
+                .task(id: l == nil) { await openAtMoment(l, proxy, at: moment) }
+                .task(id: jump) { if let jump { await openAtMoment(l, proxy, at: jump.at) } }
             }
             if inkBeside, let l {
                 Rectangle().fill(.line).frame(width: 1).ignoresSafeArea()
@@ -97,7 +105,12 @@ struct LectureView: View {
             if let l { StudyView(lectureID: l.id, title: title(l)) }
         }
         .sheet(isPresented: $asking) {
-            if let l { AskSheet(scope: .lecture(id: l.id, title: title(l))) }
+            if let l {
+                // A moment in this lecture opens here, on its Transcript; another lecture's is pushed over it.
+                AskSheet(scope: .lecture(id: l.id, title: title(l), class: filed(l))) { other, at in
+                    if other == l.id { jump = Moment(at: at) } else { app.go(.lecture(other, at: at), tab: app.tab) }
+                }
+            }
         }
         .onChange(of: app.dismissal) {
             asking = false
@@ -471,8 +484,8 @@ struct LectureView: View {
     }
 
     /// Opened at a moment: the transcript, scrolled so that line sits a third of the way down, washed for 2 seconds.
-    private func openAtMoment(_ l: Lecture?, _ proxy: ScrollViewProxy) async {
-        guard let l, let at = moment, let line = TranscriptView.line(at: at, in: l.transcript) else { return }
+    private func openAtMoment(_ l: Lecture?, _ proxy: ScrollViewProxy, at: Double?) async {
+        guard let l, let at, let line = TranscriptView.line(at: at, in: l.transcript) else { return }
         pane = .transcript
         washed = line
         try? await Task.sleep(for: .milliseconds(350))

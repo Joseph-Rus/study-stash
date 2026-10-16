@@ -92,6 +92,8 @@ struct StudyView: View {
                 content
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("page.study")
             .page()
             .foregroundStyle(.ink)
             .navigationBarTitleDisplayMode(.inline)

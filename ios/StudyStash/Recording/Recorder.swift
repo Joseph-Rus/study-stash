@@ -102,7 +102,7 @@ final class Recorder {
             phase = .preparing("Getting ready to write down what's said…")
             #if targetEnvironment(simulator)
             // The simulator has no speech model: lines of a lecture stand in for what's heard.
-            if DebugLaunch.simulatesRecording {
+            if DebugLaunch.fakeMicrophone {
                 return startSimulated(r)
             }
             #endif

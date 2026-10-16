@@ -61,6 +61,7 @@ struct ClassView: View {
             .frame(maxWidth: 1040 + 2 * margin, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
+        .accessibilityIdentifier("page.class")
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
         .foregroundStyle(.ink)
         .page()

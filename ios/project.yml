@@ -127,11 +127,24 @@ targets:
       base:
         GENERATE_INFOPLIST_FILE: YES
         PRODUCT_BUNDLE_IDENTIFIER: app.studystash.ios.tests
+  # The journeys a student takes (FLOWS.md), walked with real taps on the demo library.
+  StudyStashUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [StudyStashUITests]
+    dependencies:
+      - target: StudyStash
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: app.studystash.ios.uitests
+        TEST_TARGET_NAME: StudyStash
 schemes:
   StudyStash:
     build:
       targets:
         StudyStash: all
         StudyStashTests: [test]
+        StudyStashUITests: [test]
     test:
-      targets: [StudyStashTests]
+      targets: [StudyStashTests, StudyStashUITests]

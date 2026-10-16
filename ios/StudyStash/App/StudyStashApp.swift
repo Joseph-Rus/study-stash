@@ -286,6 +286,10 @@ enum DebugLaunch {
     /// The made-up lecture lines stand in for the microphone (the simulator has no speech model).
     static var simulatesRecording: Bool { flag("-record") || value("-show") == "record" }
 
+    /// The made-up lines stand in for the microphone whenever Record is tapped (`-fake-mic`, for the UI tests), without
+    /// opening the recorder at launch.
+    static var fakeMicrophone: Bool { simulatesRecording || flag("-fake-mic") }
+
     /// A lecture opens on this tab (`-pane transcript`), as LectureView's `Pane` names them.
     static var pane: String? { value("-pane")?.capitalized }
 

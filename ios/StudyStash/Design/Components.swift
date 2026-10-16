@@ -624,6 +624,7 @@ struct AskBar: View {
             .focused($focused)
             .submitLabel(.send)
             .onSubmit(onSend)
+            .accessibilityIdentifier("ask.field")
             .padding(.vertical, 14)
             .padding(.leading, 18)
             .layoutPriority(1)
@@ -645,6 +646,7 @@ struct AskBar: View {
         .disabled(busy || empty)
         .opacity(busy || empty ? 0.35 : 1)
         .accessibilityLabel("Ask")
+        .accessibilityIdentifier("ask.send")
     }
 }
 

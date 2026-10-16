@@ -357,6 +357,7 @@ private struct DuePage: View {
             .frame(maxWidth: regular ? 1160 : .infinity, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
+        .accessibilityIdentifier("page.due")
         .foregroundStyle(.ink)
         .page()
         .titleOnScroll("Due", after: 44)
@@ -1252,14 +1253,15 @@ struct AssignmentView: View {
                     .padding(.horizontal, sizeClass == .regular ? Space.pageRegular : Space.pageCompact)
             }
         }
+        .accessibilityIdentifier("page.assignment")
         .foregroundStyle(.ink)
         .page()
         .titleOnScroll(detail?.value?.name ?? "", after: 110)
-        // FLOWS: Ask how to start this sends its question on open, and a source opens the lecture at its moment on
-        // this tab, once the ask-search lane's AskSheet(scope:question:onMoment:) is merged:
-        // AskSheet(scope: .class(className), question: "How should I start \(name)? Use what was said in my lectures.",
-        //          onMoment: { id, at in app.go(.lecture(id, at: at), tab: app.tab) })
-        .sheet(isPresented: $asking) { AskSheet(scope: .class(className)) }
+        // Ask how to start this sends its question as it opens; a source opens the lecture at its moment on this tab.
+        .sheet(isPresented: $asking) {
+            AskSheet(scope: .class(className),
+                     question: detail?.value.map { "How should I start \($0.name)? Use what was said in my lectures." })
+        }
         .onChange(of: app.dismissal) { asking = false }
         // The Record bar records into this assignment's class.
         .recordsInto(className)

@@ -45,6 +45,7 @@ struct SettingsTab: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .scrollIndicators(.hidden)
+            .accessibilityIdentifier("page.settings")
             .onAppear {
                 #if DEBUG
                 if let part = DebugLaunch.value("-scroll").flatMap(Part.init) {
