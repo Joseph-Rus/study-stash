@@ -91,7 +91,12 @@ struct PairView: View {
         } foot: {
             Button { path.append(.connect) } label: { Text("Connect to my computer").frame(maxWidth: .infinity) }
                 .buttonStyle(.pill(ink: true))
-            Button("Try it with sample classes") { withAnimation(.smooth) { app.tryDemo() } }
+            Button("Try it with sample classes") {
+                withAnimation(.smooth) {
+                    app.tryDemo()
+                    app.go(to: .home)
+                }
+            }
                 .buttonStyle(.textLink)
             Text("No computer with Study Stash yet? Get it at \(SetupLinks.siteName)")
                 .textStyle(.meta)
@@ -559,7 +564,7 @@ private struct YoureIn: View {
     var body: some View {
         SetupScreen(title: "You're in", lede: "This phone reads \(joined.library.name).") {
             VStack(alignment: .leading, spacing: 0) {
-                NextRow(icon: "mic", title: "Record your next class", about: recordAbout, first: true) { goHome() }
+                NextRow(icon: "mic", title: "Record your next class", about: recordAbout, first: true) { recordNext() }
                 NextRow(icon: remindersOn ? "check_circle" : "notifications",
                         title: remindersOn ? "Reminders are on" : "Get a reminder when a class starts",
                         about: remindersAbout) { Task { await askReminders() } }
@@ -580,7 +585,10 @@ private struct YoureIn: View {
         guard let e = joined.next, let start = Format.parse(e.start) else { return "Tap Record at the bottom of any page." }
         let name = e.class ?? e.title
         let now = Date.now
-        if start <= now { return "\(name) is on now. On Home, tap it to record it." }
+        if start <= now { return "\(name) is on now. Tap here to record it." }
+        if start.timeIntervalSince(now) < 15 * 60 {
+            return "\(name) starts \(Format.inMinutes(start.timeIntervalSince(now))). Tap here to record it."
+        }
         let when: String = if start.timeIntervalSince(now) < 3600 {
             Format.inMinutes(start.timeIntervalSince(now))
         } else {
@@ -622,16 +630,24 @@ private struct YoureIn: View {
         }
     }
 
-    /// Into the app, on Home (and the newest lecture, when that's where the student's going).
+    /// Into the app, on Home's first page (or the newest lecture pushed on it, when that's where the student's going).
     private func goHome(open lecture: String? = nil) {
-        withAnimation(.smooth) { app.paired(base: joined.base, library: joined.library) }
-        guard let lecture else { return }
-        // FLOWS: after the merge with iphone-look this is `app.go(.lecture(lecture), tab: .home, root: true)`. Until
-        // then Home takes a pending route only once it's on screen, so it's set once Home is up.
-        Task {
-            try? await Task.sleep(for: .milliseconds(600))
-            app.pendingRoute = .lecture(lecture)
+        withAnimation(.smooth) {
+            app.paired(base: joined.base, library: joined.library)
+            if let lecture { app.go(.lecture(lecture), tab: .home, root: true) } else { app.go(to: .home) }
         }
+    }
+
+    /// The next class: on now, it records it (into its class, titled as Up next titles it); later, it's Home, where
+    /// its row records it when it starts.
+    private func recordNext() {
+        guard let e = joined.next, let start = Format.parse(e.start), start.timeIntervalSinceNow < 15 * 60 else {
+            goHome()
+            return
+        }
+        goHome()
+        let cls = e.class
+        app.record(for: cls, title: cls.map { Nouns.untitled(folder: $0, date: e.start) } ?? e.title)
     }
 }
 
