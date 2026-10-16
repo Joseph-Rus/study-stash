@@ -78,7 +78,11 @@ struct SettingsTab: View {
                     if let added = me?.device?.added, let d = Format.parse(added) {
                         LabeledContent("Added", value: Format.shortDate(d))
                     }
-                    Button("Remove this phone", role: .destructive) { confirming = true }
+                    if app.isDemo {
+                        Button("Leave the demo") { Task { await app.forget() } }
+                    } else {
+                        Button("Remove this phone", role: .destructive) { confirming = true }
+                    }
                 } header: {
                     Text("This phone")
                 } footer: {

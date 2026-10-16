@@ -168,6 +168,7 @@ enum DebugLaunch {
     }
 
     @MainActor static func pairIfAsked(_ app: AppModel) async {
+        if ProcessInfo.processInfo.arguments.contains("-demo") { app.tryDemo(); return }
         // `-library <address>`: use a library with no password (a test one) without pairing.
         if let address = value("-library"), let base = LibraryAddress.candidates(from: address).first,
            let me = try? await APIClient(base: base, session: AppModel.session).me() {

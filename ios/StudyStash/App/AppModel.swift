@@ -209,6 +209,8 @@ final class AppModel {
         c.httpShouldSetCookies = true
         c.waitsForConnectivity = false
         c.timeoutIntervalForRequest = 20
+        // The demo library answers in the app.
+        c.protocolClasses = [DemoLibrary.self] + (c.protocolClasses ?? [])
         return URLSession(configuration: c)
     }()
 
@@ -244,6 +246,12 @@ final class AppModel {
         api = makeClient(base)
         offline = false
         phase = .ready
+    }
+
+    var isDemo: Bool { api?.base.host() == DemoLibrary.host }
+
+    func tryDemo() {
+        paired(base: DemoLibrary.base, library: Me.Library(name: "Demo library", version: "demo"))
     }
 
     /// The library no longer knows this phone (removed in Settings), or the student chose to forget it.

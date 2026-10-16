@@ -92,9 +92,12 @@ struct PairView: View {
                 .controlSize(.large)
                 .disabled(step == .finding)
 
-                Button("Type the address instead") { typing = true }
-                    .font(.subheadline.weight(.medium))
-                    .padding(.vertical, 6)
+                HStack(spacing: 18) {
+                    Button("Type the address instead") { typing = true }
+                    Button("Try a demo") { withAnimation(.smooth) { app.tryDemo() } }
+                }
+                .font(.subheadline.weight(.medium))
+                .padding(.vertical, 6)
             }
         }
         .padding(.horizontal, 24)
