@@ -129,7 +129,7 @@ struct SettingsTab: View {
                         .padding(.horizontal, 12)
                         .padding(.top, 18)
                         .padding(.bottom, 14)
-                    RowRule()
+                    SettingsRowRule()
                     SettingsRow(title: libraryName, detail: libraryDetail) {
                         switch reach {
                         case .connected: Text("Connected").textStyle(.body).foregroundStyle(.ink).fixedSize()
@@ -140,10 +140,10 @@ struct SettingsTab: View {
                     }
                     if let base = app.api?.base {
                         if let computer {
-                            RowRule()
+                            SettingsRowRule()
                             SettingsRow(title: "Computer") { Value(computer) }
                         }
-                        RowRule()
+                        SettingsRowRule()
                         SettingsRow(title: "Address") { Value(address(base)) }
                             .contextMenu {
                                 Button("Copy", icon: "content_copy") { UIPasteboard.general.string = address(base) }
@@ -206,10 +206,10 @@ struct SettingsTab: View {
             SettingsBox {
                 Toggle("When a class starts, offer to record it", isOn: $remindClass)
                     .toggleStyle(SettingsSwitchStyle())
-                RowRule()
+                SettingsRowRule()
                 Toggle("Before work is due: the evening before and 2 hours before", isOn: $remindDue)
                     .toggleStyle(SettingsSwitchStyle())
-                RowRule()
+                SettingsRowRule()
                 Toggle("When notes for a recording from this \(device) are ready", isOn: $remindNotes)
                     .toggleStyle(SettingsSwitchStyle())
             }
@@ -260,10 +260,10 @@ struct SettingsTab: View {
             SettingsBox {
                 SettingsRow(title: "Name") { Value(me?.device?.name ?? UIDevice.current.name) }
                 if let added = me?.device?.added, let d = Format.parse(added) {
-                    RowRule()
+                    SettingsRowRule()
                     SettingsRow(title: "Added") { Value(Format.day(d)) }
                 }
-                RowRule()
+                SettingsRowRule()
                 Button { confirming = true } label: {
                     SettingsRow(title: "Remove this \(device)") { EmptyView() }
                 }
@@ -400,7 +400,7 @@ private struct Value: View {
 }
 
 /// A hairline between two rows of a group, from the rows' text edge to the right.
-private struct RowRule: View {
+private struct SettingsRowRule: View {
     var body: some View { Rule().padding(.leading, 16) }
 }
 

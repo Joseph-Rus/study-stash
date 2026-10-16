@@ -235,7 +235,7 @@ private struct LibraryHome: View {
                     .padding(.bottom, 4)
                     ForEach(Array(soon.prefix(3).enumerated()), id: \.offset) { _, x in
                         Button { path.append(Route.assignment(class: x.item.class, id: x.item.id)) } label: {
-                            DueRow(item: x.item, late: x.late, hue: app.hue(of: x.item.class), now: now)
+                            HomeDueRow(item: x.item, late: x.late, hue: app.hue(of: x.item.class), now: now)
                         }
                         .buttonStyle(.row)
                     }
@@ -462,7 +462,7 @@ private struct HomeOffline: View {
 
 /// Something due, as Up next's rows are laid out: when (the time over the day; "Missing" in the late red over the day
 /// it was due) | its name, marked with its class's highlighter.
-private struct DueRow: View {
+private struct HomeDueRow: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     var item: DueItem
     var late: Bool

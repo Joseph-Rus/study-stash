@@ -95,6 +95,9 @@ struct MainTabs: View {
             if app.forSchool { Tab("Due", image: "event_upcoming", value: TabID.due) { DueTab() } }
             Tab("Ask", image: "chat", value: TabID.ask) { AskTab() }
             Tab("Search", image: "search", value: TabID.search, role: .search) { SearchTab() }
+            // TO DO: the iPad sidebar below crashes Swift 6.2.3 type-checking this TabView as written; it is left out until
+            // it is rebuilt (e.g. its tabs made in a function of their own).
+/*SIDEBAR
             // An iPad's sidebar: each class under its group, as the desktop's sidebar (not in a phone's tab bar).
             ForEach(app.folderGroups) { group in
                 TabSection(group.name) {
@@ -108,6 +111,7 @@ struct MainTabs: View {
                 }
                 .tabPlacement(.sidebarOnly)
             }
+SIDEBAR*/
         }
         .tabViewStyle(.sidebarAdaptable)
         .tabViewSidebarBottomBar { SidebarFooter() }

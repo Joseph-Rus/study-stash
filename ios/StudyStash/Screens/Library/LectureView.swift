@@ -1079,13 +1079,17 @@ private struct FolderPickerSheet: View {
     @State private var query = ""
     @FocusState private var searching: Bool
 
+    /// Classes first, then each other group in the order the library has them.
+    private var groupNames: [String] {
+        var names = [""]
+        for c in app.classes where !names.contains(c.group ?? "") { names.append(c.group ?? "") }
+        return names
+    }
+
     var body: some View {
         let q = query.trimmingCharacters(in: .whitespaces).lowercased()
         let classes = app.classes.filter { q.isEmpty || $0.name.lowercased().contains(q) || ($0.code ?? "").lowercased().contains(q) }
-        // Classes first, then each other group in the order the library has them.
-        var names = [""]
-        for c in app.classes where !names.contains(c.group ?? "") { names.append(c.group ?? "") }
-        let groups = names.map { g in (label: g, items: classes.filter { ($0.group ?? "") == g }) }.filter { !$0.items.isEmpty }
+        let groups = groupNames.map { g in (label: g, items: classes.filter { ($0.group ?? "") == g }) }.filter { !$0.items.isEmpty }
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {

@@ -444,7 +444,7 @@ private struct DuePage: View {
                             Label {
                                 Text(name)
                             } icon: {
-                                if only == name { Image(icon: "check") } else { SwatchImage.image(app.hue(of: name)) }
+                                if only == name { Image(icon: "check") } else { DueSwatchImage.image(app.hue(of: name)) }
                             }
                         }
                     }
@@ -1091,7 +1091,7 @@ private struct WeightedRow: Layout {
 
 /// A class's swatch as a picture, for a menu (the system draws a menu's rows; it takes an image, kept in its colours).
 @MainActor
-private enum SwatchImage {
+private enum DueSwatchImage {
     static func image(_ hue: Highlighter?) -> Image {
         let size = CGSize(width: 18, height: 14)
         let colour = hue?.swatchUI ?? UIColor(hex: "#808080")
