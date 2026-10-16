@@ -157,6 +157,19 @@ struct ComponentGallery: View {
     @State private var only = true
 
     var body: some View {
+        NavigationStack {
+            gallery
+                .navigationTitle("Components")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    // A bar button's words as the system draws them, and as Atkinson (for the page lanes to compare).
+                    ToolbarItem(placement: .cancellationAction) { Button("Done") { } }
+                    ToolbarItem(placement: .confirmationAction) { Button { } label: { Text("Done").textStyle(.button) } }
+                }
+        }
+    }
+
+    private var gallery: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 switch page {

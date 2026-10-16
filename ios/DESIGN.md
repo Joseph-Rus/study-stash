@@ -96,8 +96,10 @@ Appearance: `@AppStorage(Appearance.key)` holds `Appearance.system / .light / .d
 `.fontWeight(.bold)` and `.bold()` pick the family's real face. The family has no italic, and `.italic()` leaves it
 upright: for the desktop's italic lines (a pending summary, the notes hint) use `.textStyle(.summary, italic: true)`,
 which slants the face 12°.
-Navigation bar titles (large and inline, and subtitles), bar buttons, the tab bar, segmented controls and the search
-field are already Atkinson (`App/SystemLook.swift`).
+Navigation bar titles (large and inline, and subtitles), the tab bar, segmented controls and the search field are
+already Atkinson (`App/SystemLook.swift`). A toolbar button with words is not: iOS 26 draws those itself, so give
+the label its style, `Button { … } label: { Text("Done").textStyle(.button) }` (`.nav` for Cancel and the like).
+Menus, alerts, confirmation dialogs and the keyboard stay the system's.
 
 ## Icons (`Icons.swift`, `Resources/Icons.xcassets`)
 
