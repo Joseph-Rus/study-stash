@@ -94,6 +94,8 @@ targets:
       - path: StudyStash/Design/Theme.swift
       - path: StudyStash/Design/Type.swift
       - path: StudyStash/Design/Icons.swift
+      # The app's words for dates, times and lengths ("Tomorrow 9:00 AM", "Sun 18 Oct, in 6 days").
+      - path: StudyStash/App/Format.swift
       - path: StudyStash/Resources/Icons.xcassets
       - path: StudyStash/Resources/Fonts
         buildPhase: resources
