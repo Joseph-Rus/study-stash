@@ -7,18 +7,12 @@ import SwiftUI
 /// a highlight that moves it. + attaches; Settings sits beside it. Record is the bar above the tabs, not here.
 struct LibraryTab: View {
     @Environment(AppModel.self) private var app
-    @State private var path: NavigationPath = DebugLaunch.route.map { NavigationPath([$0]) } ?? NavigationPath()
 
     var body: some View {
-        NavigationStack(path: $path) {
+        NavigationStack(path: app.stack(.home)) {
             if let api = app.api {
-                LibraryHome(api: api, path: $path).routes()
+                LibraryHome(api: api, path: app.stack(.home)).routes()
             }
-        }
-        .onChange(of: app.pendingRoute) { _, r in
-            guard let r else { return }
-            path.append(r)
-            app.pendingRoute = nil
         }
     }
 }
@@ -98,11 +92,11 @@ private struct LibraryHome: View {
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 // One Attach: the sheet that asks which class, then scans, photos, files, writing, a recording.
-                // FLOWS: after the merge, `app.incoming = .attach(className: nil, lecture: nil)`.
-                Button { app.incoming = .files([], className: nil, lecture: nil) } label: { Label("Attach", icon: "add") }
+                Button { app.incoming = .attach(className: nil, lecture: nil) } label: { Label("Attach", icon: "add") }
                     .accessibilityLabel("Attach")
-                // FLOWS: after the merge, Settings off the tab bar: `Button { path.append(Route.settings) } label: {
-                // Label("Settings", icon: "settings") }`.
+                // Settings, in the page's corner as the desktop has it (it's no longer a tab).
+                NavigationLink(value: Route.settings) { Label("Settings", icon: "settings") }
+                    .accessibilityLabel("Settings")
             }
         }
         .overlay(alignment: .bottom) { toastView }
@@ -233,9 +227,7 @@ private struct LibraryHome: View {
             let soon = HomeWords.dueSoon(list, now: now)
             if !soon.isEmpty {
                 VStack(alignment: .leading, spacing: 0) {
-                    SectionHeading(title: "Due this week", trailing: "See all") {
-                        // FLOWS: after the merge, `app.showDue(class: nil)`.
-                    }
+                    SectionHeading(title: "Due this week", trailing: "See all") { app.showDue(class: nil) }
                     .padding(.bottom, 4)
                     ForEach(Array(soon.prefix(3).enumerated()), id: \.offset) { _, x in
                         Button { path.append(Route.assignment(class: x.item.class, id: x.item.id)) } label: {
@@ -793,13 +785,12 @@ struct OnThisPhone: View {
 
     private func row(_ r: Recording) -> some View {
         HStack(alignment: .center, spacing: 8) {
-            // FLOWS: after the merge the row is `NavigationLink(value: Route.recording(r.id))`, the recording's page.
-            Button { send(r) } label: {
+            // The recording's own page: where it's got to, what was typed and said, Send now, Share, Delete.
+            NavigationLink(value: Route.recording(r.id)) {
                 line(title: title(r), icon: r.state == .failed ? "warning" : r.state == .sending ? "upload" : "cloud_upload",
                      status: status(r), late: r.state == .failed && r.error != nil)
             }
             .buttonStyle(.row)
-            .disabled(r.state == .sending)
             if r.state == .sending { ProgressView().tint(.inkSubtle) }
             Menu { actions(r) } label: { Label("More", icon: "more_horiz") }
                 .buttonStyle(.icon)
