@@ -37,6 +37,21 @@ final class AppModel {
     }
 
     var incoming: Incoming?
+    /// A screen to open on the Library tab (from a notification).
+    var pendingRoute: Route?
+
+    /// Fresh due work and calendar: reminders scheduled from them, recordings waiting sent, notes ready said.
+    func refreshInBackground() async {
+        guard let api else { return }
+        async let due = try? api.due()
+        async let upcoming = try? api.upcoming()
+        let (d, u) = await (due, upcoming)
+        if let d { ResponseCache.shared.write("due", d) }
+        if let u { ResponseCache.shared.write("upcoming", u) }
+        await Reminders.schedule(upcoming: u, due: d) { [weak self] e in self?.className(ofEvent: e) }
+        await RecordingStore.shared.sendWaiting(api: api)
+        await Reminders.checkNotes(api: api)
+    }
 
     /// A file another app handed over ("Open in Study Stash" / the share sheet).
     func open(_ url: URL) {

@@ -18,7 +18,11 @@ targets:
   StudyStash:
     type: application
     platform: iOS
+    dependencies:
+      - target: StudyStashWidgets
+        embed: true
     sources:
+      - path: Shared
       - path: StudyStash
         excludes: [Resources/Notes]
       # KaTeX's stylesheet finds its fonts at fonts/…: kept as a folder in the app, not flattened.
@@ -48,6 +52,7 @@ targets:
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
         UIBackgroundModes: [audio, fetch]
+        NSSupportsLiveActivities: true
         # Opened from another app's share sheet: recordings, PDFs and photos, and GoodNotes notebooks.
         CFBundleDocumentTypes:
           - CFBundleTypeName: Recording
@@ -70,6 +75,23 @@ targets:
               public.filename-extension: [goodnotes]
         LSSupportsOpeningDocumentsInPlace: false
         BGTaskSchedulerPermittedIdentifiers: [app.studystash.ios.refresh]
+  StudyStashWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: StudyStashWidgets
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.studystash.ios.widgets
+        PRODUCT_NAME: StudyStashWidgets
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Study Stash
+    info:
+      path: StudyStashWidgets/Info.plist
+      properties:
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
   StudyStashTests:
     type: bundle.unit-test
     platform: iOS

@@ -12,6 +12,11 @@ struct LibraryTab: View {
                 LibraryHome(api: api, path: $path).routes()
             }
         }
+        .onChange(of: app.pendingRoute) { _, r in
+            guard let r else { return }
+            path.append(r)
+            app.pendingRoute = nil
+        }
     }
 }
 

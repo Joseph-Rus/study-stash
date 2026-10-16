@@ -6,6 +6,12 @@ struct SettingsTab: View {
     @AppStorage("theme") private var themeName = ColourTheme.lagoon.name
     @State private var me: Me?
     @State private var confirming = false
+    @State private var reminderTick = 0
+
+    private func reschedule() {
+        reminderTick += 1
+        Task { await app.refreshInBackground() }
+    }
 
     var body: some View {
         NavigationStack {
@@ -52,6 +58,14 @@ struct SettingsTab: View {
                 }
 
                 Section {
+                    Toggle("When a class starts, offer to record", isOn: Binding(get: { Reminders.Settings.classStart }, set: { Reminders.Settings.classStart = $0; reschedule() }))
+                    Toggle("Work due: the evening before and 2 hours before", isOn: Binding(get: { Reminders.Settings.due }, set: { Reminders.Settings.due = $0; reschedule() }))
+                    Toggle("Notes ready for a lecture recorded here", isOn: Binding(get: { Reminders.Settings.notes }, set: { Reminders.Settings.notes = $0 }))
+                } header: {
+                    Text("Notifications")
+                }
+
+                Section {
                     LabeledContent("Name", value: me?.device?.name ?? UIDevice.current.name)
                     if let added = me?.device?.added, let d = Format.parse(added) {
                         LabeledContent("Added", value: Format.shortDate(d))
@@ -71,6 +85,7 @@ struct SettingsTab: View {
             .background(.paper)
             .navigationTitle("Settings")
             .task { me = try? await app.api?.me() }
+            .id(reminderTick)
             .confirmationDialog("Remove this phone from \(app.libraryName)?", isPresented: $confirming, titleVisibility: .visible) {
                 Button("Remove", role: .destructive) { Task { await app.forget() } }
             } message: {

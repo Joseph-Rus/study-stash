@@ -1,15 +1,25 @@
 import SwiftUI
+import UserNotifications
 
 @main
 struct StudyStashApp: App {
     @State private var app = AppModel()
     @AppStorage("theme") private var themeName = ColourTheme.lagoon.name
 
+    init() {
+        UNUserNotificationCenter.current().delegate = NotificationRouter.shared
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environment(app)
                 .tint(ColourTheme.named(themeName).accent)
+                .task { NotificationRouter.shared.app = app }
+        }
+        .backgroundTask(.appRefresh(Reminders.refreshTask)) {
+            await app.refreshInBackground()
+            await Reminders.scheduleRefresh()
         }
     }
 }
@@ -44,6 +54,7 @@ struct RootView: View {
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active, app.phase != .unpaired, DebugLaunch.value("-library") == nil { Task { await app.check() } }
+            if phase == .background { Reminders.scheduleRefresh() }
         }
     }
 }
@@ -77,8 +88,15 @@ struct MainTabs: View {
             }
         }
         .onOpenURL { app.open($0) }
+        .onChange(of: app.pendingRoute) { _, r in if r != nil { tab = .library } }
         .task {
+            // Pause, Stop and Record from the lock screen, Control Center and Siri.
+            RecordingControl.stop = { [app] in await Recorder.shared.stop(api: app.api) }
+            RecordingControl.togglePause = { Recorder.shared.phase == .paused ? Recorder.shared.resume() : Recorder.shared.pause() }
+            RecordingControl.start = { [app] in app.record(for: app.classNow(ResponseCache.shared.read("upcoming", as: Upcoming.self))) }
+            Task { await Reminders.setUp() }
             upcoming = try? await app.api?.upcoming()
+            await app.refreshInBackground()
             #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("-record") { app.record(for: app.classNow(upcoming)) }
             if let path = DebugLaunch.value("-open-file") { app.open(URL(fileURLWithPath: path)) }

@@ -1,4 +1,5 @@
 @preconcurrency import AVFoundation
+@preconcurrency import ActivityKit
 import Foundation
 import Observation
 import Speech
@@ -42,6 +43,40 @@ final class Recorder {
     @ObservationIgnored private var resumedAt: Date?
     @ObservationIgnored private var before: TimeInterval = 0
     @ObservationIgnored private let store: RecordingStore
+    @ObservationIgnored private var activity: Activity<RecordingAttributes>?
+
+    // MARK: the Live Activity
+
+    private var activityState: RecordingAttributes.ContentState {
+        RecordingAttributes.ContentState(countingFrom: Date.now.addingTimeInterval(-elapsed), paused: phase == .paused,
+                                         elapsed: elapsed, finishing: phase == .finishing)
+    }
+
+    private func startActivity() {
+        guard ActivityAuthorizationInfo().areActivitiesEnabled, let r = recording else {
+            NSLog("[live] activities off")
+            return
+        }
+        let attributes = RecordingAttributes(title: r.displayTitle, className: r.className, colorHex: nil)
+        do {
+            activity = try Activity.request(attributes: attributes, content: .init(state: activityState, staleDate: nil))
+        } catch {
+            NSLog("[live] couldn't start: %@", "\(error)")
+        }
+    }
+
+    private func updateActivity() {
+        guard let activity else { return }
+        let state = activityState
+        Task { @MainActor in await activity.update(.init(state: state, staleDate: nil)) }
+    }
+
+    private func endActivity() {
+        guard let activity else { return }
+        let state = activityState
+        self.activity = nil
+        Task { @MainActor in await activity.end(.init(state: state, staleDate: nil), dismissalPolicy: .immediate) }
+    }
 
     init(store: RecordingStore = .shared) { self.store = store }
 
@@ -103,6 +138,7 @@ final class Recorder {
             phase = .recording
             UIApplication.shared.isIdleTimerDisabled = false
             resultsTask = Task { [weak self] in await self?.read(results) }
+            startActivity()
             tickTask = Task { [weak self] in
                 while !Task.isCancelled {
                     try? await Task.sleep(for: .milliseconds(250))
@@ -131,6 +167,7 @@ final class Recorder {
                      "If two actions land in one cell, that's a conflict, and the grammar isn't LR(1)."]
         let (stream, continuation) = AsyncThrowingStream<Heard, Error>.makeStream()
         resultsTask = Task { [weak self] in await self?.read(stream) }
+        startActivity()
         tickTask = Task { [weak self] in
             var i = 0
             while !Task.isCancelled {
@@ -158,6 +195,8 @@ final class Recorder {
         before += resumedAt.map { Date.now.timeIntervalSince($0) } ?? 0
         resumedAt = nil
         phase = .paused
+        tick()
+        updateActivity()
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
@@ -167,6 +206,7 @@ final class Recorder {
             try engine?.start()
             resumedAt = .now
             phase = .recording
+            updateActivity()
         } catch {
             phase = .failed("Couldn't carry on recording: \(error.localizedDescription)")
         }
@@ -177,6 +217,7 @@ final class Recorder {
         guard isActive, var r = recording else { return }
         tick()
         phase = .finishing
+        updateActivity()
         engine?.inputNode.removeTap(onBus: 0)
         engine?.stop()
         input?.finish()
@@ -211,6 +252,7 @@ final class Recorder {
     }
 
     private func teardown() {
+        endActivity()
         resultsTask?.cancel()
         tickTask?.cancel()
         engine = nil
