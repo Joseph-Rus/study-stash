@@ -3,6 +3,46 @@ import WidgetKit
 import Observation
 import SwiftUI
 
+/// The tabs: Home, Due (school libraries), Ask and Search on a phone; on an iPad's sidebar also each class
+/// (`folder`). Settings is a page pushed from Home's toolbar.
+enum TabID: Hashable, Sendable {
+    case home, due, ask, search
+    case folder(String)
+}
+
+extension View {
+    /// This page is about `cls` (a class's page, a lecture in it): while it shows, the Record bar says "Record
+    /// Calculus II" and records into it. Nil says nothing (the bar falls back to the class on the calendar now).
+    func recordsInto(_ cls: String?) -> some View { modifier(RecordsInto(cls: cls)) }
+
+    /// While this page shows, the Record bar above the tabs is hidden (a page that hides the tab bar).
+    func hidesRecordBar(_ hide: Bool = true) -> some View { modifier(HidesRecordBar(hide: hide)) }
+}
+
+private struct RecordsInto: ViewModifier {
+    var cls: String?
+    @Environment(AppModel.self) private var app
+    @State private var token = UUID()
+    func body(content: Content) -> some View {
+        content
+            .onAppear { app.enterRecordPlace(token, cls) }
+            .onChange(of: cls) { _, new in app.enterRecordPlace(token, new) }
+            .onDisappear { app.leaveRecordPlace(token) }
+    }
+}
+
+private struct HidesRecordBar: ViewModifier {
+    var hide: Bool
+    @Environment(AppModel.self) private var app
+    @State private var token = UUID()
+    func body(content: Content) -> some View {
+        content
+            .onAppear { app.hideRecordBar(token, hide) }
+            .onChange(of: hide) { _, new in app.hideRecordBar(token, new) }
+            .onDisappear { app.hideRecordBar(token, false) }
+    }
+}
+
 /// The whole app's state: which library this phone is paired with, and the client that reaches it.
 @MainActor @Observable
 final class AppModel {
@@ -26,9 +66,13 @@ final class AppModel {
         case audio(PendingFile?)
         case goodnotes(URL)
         case handwriting(className: String?, lecture: (id: String, title: String)?)
+        /// The Attach sheet, the one chooser (scan, photos, files, write, import a recording, GoodNotes), for a class
+        /// and maybe a lecture; nil class from Home (it asks which).
+        case attach(className: String?, lecture: (id: String, title: String)?)
 
         var id: String {
             switch self {
+            case .attach(let c, let l): "attach-\(c ?? "")-\(l?.id ?? "")"
             case .files(let f, _, _): "files-\(f.map(\.id.uuidString).joined())"
             case .audio(let f): "audio-\(f?.id.uuidString ?? "")"
             case .goodnotes(let u): "goodnotes-\(u.path)"
@@ -38,8 +82,44 @@ final class AppModel {
     }
 
     var incoming: Incoming?
-    /// A screen to open on the Library tab (from a notification).
-    var pendingRoute: Route?
+
+    // MARK: where the app is: tabs, their stacks, going somewhere
+
+    /// The tab showing.
+    var tab: TabID = DebugLaunch.tab ?? .home
+    /// Each tab's stack of pages (`NavigationStack(path: app.stack(.due))`).
+    var paths: [TabID: NavigationPath] = [:]
+    /// Goes up by one whenever `go` closes what's presented: a page that presents a sheet or cover of its own closes it
+    /// on a change (`.onChange(of: app.dismissal) { asking = false }`).
+    private(set) var dismissal = 0
+    /// The class Due shows when it's opened for one (`showDue(class:)`); nil for all.
+    var dueFilter: String?
+
+    /// A tab's stack, for its NavigationStack.
+    func stack(_ tab: TabID) -> Binding<NavigationPath> {
+        Binding(get: { self.paths[tab] ?? NavigationPath() }, set: { self.paths[tab] = $0 })
+    }
+
+    /// Go to `route` from anywhere (a sheet, a widget, a notification, another tab): close what's presented, select
+    /// `tab`, with `root` empty its stack first, then push `route` (nil: just the tab).
+    func go(_ route: Route?, tab: TabID = .home, root: Bool = false) {
+        showingRecorder = false
+        incoming = nil
+        dismissal += 1
+        var path = root ? NavigationPath() : (paths[tab] ?? NavigationPath())
+        if let route { path.append(route) }
+        paths[tab] = path
+        self.tab = tab
+    }
+
+    /// A tab at its first page (Home from setup, a class-start notification).
+    func go(to tab: TabID, root: Bool = true) { go(nil, tab: tab, root: root) }
+
+    /// Due, showing one class's work (or all).
+    func showDue(class cls: String?) {
+        dueFilter = cls
+        go(to: forSchool ? .due : .home, root: true)
+    }
 
     /// Fresh due work and calendar: reminders scheduled from them, recordings waiting sent, notes ready said.
     func refreshInBackground() async {
@@ -48,7 +128,7 @@ final class AppModel {
         async let upcoming = try? api.upcoming()
         let (d, u) = await (due, upcoming)
         if let d { ResponseCache.shared.write("due", d) }
-        if let u { ResponseCache.shared.write("upcoming", u) }
+        if let u { ResponseCache.shared.write("upcoming", u); self.upcoming = u }
         await Reminders.schedule(upcoming: u, due: d) { [weak self] e in self?.className(ofEvent: e) }
         writeGlance(upcoming: u, due: d)
         await RecordingStore.shared.sendWaiting(api: api)
@@ -66,13 +146,50 @@ final class AppModel {
         incoming = file.type.hasPrefix("audio/") || file.type.hasPrefix("video/") ? .audio(file) : .files([file], className: nil, lecture: nil)
     }
 
-    /// The recording screen is up; `recordFor` is the class it starts with.
+    // MARK: recording: where Record records, starting, after Stop
+
+    /// The recording screen is up; `recordFor` is the class it starts with, `recordTitle` its title (from an event:
+    /// "Calculus II, Fri 16 Oct"; "" for none).
     var showingRecorder = false
     var recordFor: String?
+    var recordTitle = ""
 
-    func record(for cls: String?) {
+    /// Open the recorder, recording into `cls` (nil: Unsorted) with `title`; or, when something's recording, show it.
+    func record(for cls: String?, title: String = "") {
         recordFor = cls
+        recordTitle = title
         showingRecorder = true
+    }
+
+    /// The calendar, as the library last said (Record's class now, Up next).
+    var upcoming: Upcoming? = ResponseCache.shared.read("upcoming", as: Upcoming.self)
+
+    /// The pages showing that are about a class, innermost last (`.recordsInto(cls)`).
+    private var recordPlaces: [(token: UUID, cls: String?)] = []
+    /// The class of the page showing, if it's about one (a class's page, a lecture in it).
+    var recordHere: String? { recordPlaces.last?.cls }
+    /// Where Record records: the page's class, else the class on the calendar now (from 10 minutes before), else none.
+    var recordClass: String? { recordHere ?? classNow(upcoming) }
+    /// What the Record bar says: "Record Calculus II", or "Record".
+    var recordWords: String { recordClass.map { "Record \($0)" } ?? "Record" }
+
+    func enterRecordPlace(_ token: UUID, _ cls: String?) {
+        recordPlaces.removeAll { $0.token == token }
+        recordPlaces.append((token, cls))
+    }
+
+    func leaveRecordPlace(_ token: UUID) { recordPlaces.removeAll { $0.token == token } }
+
+    /// Pages that hide the Record bar (the lecture page, with the tab bar hidden).
+    private var barHiders: Set<UUID> = []
+    var recordBarHidden: Bool { !barHiders.isEmpty }
+    func hideRecordBar(_ token: UUID, _ hide: Bool) { if hide { barHiders.insert(token) } else { barHiders.remove(token) } }
+
+    /// After Stop (and after Import a recording): the recorder closes, then the lecture opens in its "being written"
+    /// state when the library has it (`sent`), else the recording on this phone. `id` is the recording's, which is
+    /// the lecture's id in the library too.
+    func recordingFinished(id: String, sent: Bool) {
+        go(sent ? .lecture(id) : .recording(id), tab: .home)
     }
 
     /// Each class's place in the library, which picks its highlighter.
@@ -340,5 +457,6 @@ struct Words {
     var anyClass: String { school ? "Any class" : "Any folder" }
     var lecture: String { school ? "lecture" : work ? "meeting" : "recording" }
     var lectures: String { school ? "lectures" : work ? "meetings" : "recordings" }
-    var record: String { "Record a \(lecture)" }
+    /// The Record bar's word with no class to name: "Record".
+    var record: String { "Record" }
 }
