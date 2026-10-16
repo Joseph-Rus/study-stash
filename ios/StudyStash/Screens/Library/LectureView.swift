@@ -62,7 +62,7 @@ struct LectureView: View {
                 .frame(maxWidth: 720)
                 .frame(maxWidth: .infinity)
             }
-            .background(.paper)
+            .background(.surface)
             if inkBeside, let l {
                 Divider()
                 HandwritingView(className: l.class, lecture: (l.id, l.displayTitle), embedded: true)
@@ -70,7 +70,7 @@ struct LectureView: View {
                     .transition(.move(edge: .trailing))
             }
         }
-        .background(.paper)
+        .background(.surface)
         .titleOnScroll(l?.displayTitle ?? "", after: 170)
         .toolbar {
             if let l {
@@ -150,20 +150,20 @@ struct LectureView: View {
             if let cls = l.class {
                 NavigationLink(value: Route.classDetail(cls)) {
                     HStack(spacing: 6) {
-                        ClassDot(color: color, size: 8)
+                        Swatch(app.hue(of: cls))
                         Text(cls).font(.subheadline.weight(.semibold)).foregroundStyle(color)
                     }
                 }
                 .buttonStyle(.plain)
             }
             Text(l.displayTitle)
-                .font(.display)
+                .font(.app(.date))
                 .textSelection(.enabled)
             Text([Format.lectureMeta(l.date, l.seconds), l.owner].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
             if !l.topics.isEmpty {
-                TopicChips(topics: l.topics, tint: color)
+                TopicChips(topics: l.topics)
                     .padding(.top, 2)
             }
         }

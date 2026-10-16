@@ -12,7 +12,7 @@ struct HandwritingView: View {
 
     var body: some View {
         Group {
-            if let id { NotebookEditor(id: id, embedded: embedded) } else { Color.paper }
+            if let id { NotebookEditor(id: id, embedded: embedded) } else { Color.surface }
         }
         .task {
             if id != nil { return }

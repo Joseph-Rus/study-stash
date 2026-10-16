@@ -48,6 +48,14 @@ targets:
     info:
       path: StudyStash/Info.plist
       properties:
+        # The one typeface, Atkinson Hyperlegible Next (the desktop's own files, OFL), in Resources/Fonts.
+        UIAppFonts: &fonts
+          - AtkinsonHyperlegibleNext-Light.ttf
+          - AtkinsonHyperlegibleNext-Regular.ttf
+          - AtkinsonHyperlegibleNext-Medium.ttf
+          - AtkinsonHyperlegibleNext-SemiBold.ttf
+          - AtkinsonHyperlegibleNext-Bold.ttf
+          - AtkinsonHyperlegibleNext-ExtraBold.ttf
         # The library is on the student's own tailnet: plain http at its Tailscale IP when https (Tailscale Serve)
         # isn't set up. Tailscale encrypts that traffic itself.
         NSAppTransportSecurity:
@@ -82,6 +90,13 @@ targets:
     sources:
       - path: StudyStashWidgets
       - path: Shared
+      # The look, the same as the app's: its tokens, type and icons, the fonts and the icons' image sets.
+      - path: StudyStash/Design/Theme.swift
+      - path: StudyStash/Design/Type.swift
+      - path: StudyStash/Design/Icons.swift
+      - path: StudyStash/Resources/Icons.xcassets
+      - path: StudyStash/Resources/Fonts
+        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.studystash.ios.widgets
@@ -92,6 +107,7 @@ targets:
     info:
       path: StudyStashWidgets/Info.plist
       properties:
+        UIAppFonts: *fonts
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
   StudyStashTests:

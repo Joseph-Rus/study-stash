@@ -70,7 +70,7 @@ struct StudyView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(.paper)
+            .background(.surface)
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -145,7 +145,7 @@ private struct FlashcardsView: View {
                 } else {
                     VStack(spacing: 12) {
                         Image(systemName: "checkmark.seal.fill").font(.system(size: 54)).foregroundStyle(.green.gradient)
-                        Text("You went through all \(cards.count)").font(.titleSerif)
+                        Text("You went through all \(cards.count)").font(.app(.docTitle))
                         Button("Go again") { reset() }.buttonStyle(.borderedProminent)
                     }
                 }
@@ -168,11 +168,11 @@ private struct FlashcardsView: View {
     private func face(_ text: String, label: String) -> some View {
         VStack(spacing: 14) {
             Text(label).font(.caption.weight(.semibold)).foregroundStyle(.secondary).textCase(.uppercase)
-            Text(text).font(label == "Question" ? .titleSerif : .title3).multilineTextAlignment(.center)
+            Text(text).font(label == "Question" ? .app(.docTitle) : .app(.lede)).multilineTextAlignment(.center)
         }
         .padding(28)
         .frame(maxWidth: 520, minHeight: 300)
-        .background(.card, in: .rect(cornerRadius: 28, style: .continuous))
+        .background(.surfaceSunken, in: .rect(cornerRadius: 28, style: .continuous))
         .shadow(color: .black.opacity(0.08), radius: 16, y: 6)
     }
 
@@ -207,7 +207,7 @@ private struct QuizView: View {
                 if index < questions.count {
                     let q = questions[index]
                     Text("Question \(index + 1) of \(questions.count)").font(.footnote.monospacedDigit()).foregroundStyle(.secondary)
-                    Text(q.question).font(.titleSerif)
+                    Text(q.question).font(.app(.docTitle))
                     ForEach(Array(q.choices.enumerated()), id: \.offset) { i, choice in
                         Button {
                             guard picked == nil else { return }
@@ -222,7 +222,7 @@ private struct QuizView: View {
                                 else if picked == i { Image(systemName: "xmark.circle.fill").foregroundStyle(.red) }
                             }
                             .padding(14)
-                            .background(.card, in: .rect(cornerRadius: 14, style: .continuous))
+                            .background(.surfaceSunken, in: .rect(cornerRadius: 14, style: .continuous))
                             .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
                                 .strokeBorder(picked != nil && i == q.answer ? Color.green : picked == i ? .red : .clear, lineWidth: 2))
                         }

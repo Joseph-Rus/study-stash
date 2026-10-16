@@ -128,7 +128,16 @@ import Testing
         #expect(Format.duration(30) == "under a minute")
         #expect(Format.duration(48 * 60) == "48 min")
         #expect(Format.duration(72 * 60) == "1 h 12 min")
-        #expect(Format.duration(120 * 60) == "2 h")
+        #expect(Format.duration(120 * 60) == "2 h 00 min")
+    }
+
+    @Test func daysAndTimesInTheDesktopsWords() {
+        #expect(Format.day(Format.parse("2026-10-15T09:30")!, now: now) == "Today")
+        #expect(Format.day(Format.parse("2026-10-14")!, now: now) == "Yesterday")
+        #expect(Format.day(Format.parse("2026-10-07")!, now: now) == "Wed 7 Oct")
+        #expect(Format.day(Format.parse("2025-10-07")!, now: now) == "7 Oct 2025")
+        #expect(Format.time(Format.parse("2026-10-15T21:05")!) == "9:05 PM")
+        #expect(Format.noteWhen("2026-10-12T09:30:00", 52 * 60, now: now) == "Monday 12 October at 9:30 AM, 52 min")
     }
 
     @Test func dueWhenIsTheDayForMidnight() {
@@ -194,11 +203,9 @@ import Testing
         #expect(s.map(\.id) == ["l1", "l2"])
     }
 
-    @Test func oklchMatchesKnownColours() {
-        let white = OKLCH(l: 1, c: 0, h: 0).rgb
-        #expect(abs(white.r - 1) < 0.01 && abs(white.g - 1) < 0.01 && abs(white.b - 1) < 0.01)
-        #expect(ColourTheme.named("plum").name == "Plum")
-        #expect(ColourTheme.named("nope") == .lagoon)
+    @Test func aClassHasTheDesktopsHighlighter() {
+        // Skin.ClassHues: the order classes take them by their place in the library.
+        #expect((0..<9).map { Highlighter(classIndex: $0) } == [.yellow, .green, .orange, .pink, .blue, .teal, .violet, .lime, .yellow])
     }
 }
 

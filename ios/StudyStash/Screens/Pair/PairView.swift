@@ -39,7 +39,7 @@ struct PairView: View {
     }
 
     private var backdrop: some View {
-        LinearGradient(colors: [Color.accentColor.opacity(0.22), .paper, .paper], startPoint: .top, endPoint: .center)
+        LinearGradient(colors: [Color.accentColor.opacity(0.22), .surface, .surface], startPoint: .top, endPoint: .center)
             .ignoresSafeArea()
     }
 
@@ -53,7 +53,7 @@ struct PairView: View {
                 .glassEffect(.regular.tint(Color.accentColor.opacity(0.15)), in: .rect(cornerRadius: 30))
                 .padding(.bottom, 28)
             Text("Study Stash")
-                .font(.display)
+                .font(.app(.date))
             Text("Every lecture, written up — in your pocket.")
                 .font(.title3)
                 .foregroundStyle(.secondary)
@@ -168,7 +168,7 @@ private struct CodeEntry: View {
                 .foregroundStyle(.green.gradient)
                 .symbolEffect(.bounce, value: library.name)
             VStack(spacing: 6) {
-                Text("Found \(library.name)").font(.titleSerif).multilineTextAlignment(.center)
+                Text("Found \(library.name)").font(.app(.docTitle)).multilineTextAlignment(.center)
                 Text("Type the 6-digit code Study Stash shows beside the QR code.")
                     .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
             }
@@ -191,7 +191,7 @@ private struct CodeEntry: View {
                             .font(.system(.title, design: .rounded, weight: .semibold))
                             .monospacedDigit()
                             .frame(width: 46, height: 58)
-                            .background(.card, in: .rect(cornerRadius: 14, style: .continuous))
+                            .background(.surfaceSunken, in: .rect(cornerRadius: 14, style: .continuous))
                             .overlay {
                                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                                     .strokeBorder(i == chars.count && focused ? Color.accentColor : .secondary.opacity(0.2), lineWidth: i == chars.count && focused ? 2 : 1)
@@ -212,7 +212,7 @@ private struct CodeEntry: View {
                 Text("What should we call this phone?").font(.footnote).foregroundStyle(.secondary)
                 TextField("iPhone", text: $name)
                     .padding(12)
-                    .background(.card, in: .rect(cornerRadius: 12, style: .continuous))
+                    .background(.surfaceSunken, in: .rect(cornerRadius: 12, style: .continuous))
             }
             .padding(.top, 8)
 

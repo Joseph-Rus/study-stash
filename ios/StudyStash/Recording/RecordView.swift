@@ -19,7 +19,7 @@ struct RecordView: View {
     var body: some View {
         NavigationStack {
             ZStack(alignment: .bottom) {
-                Color.paper.ignoresSafeArea()
+                Color.surface.ignoresSafeArea()
                 if let sent {
                     SentView(recording: sent) { dismiss() }
                 } else {
@@ -115,7 +115,7 @@ struct RecordView: View {
             TextField("Add a title", text: Binding(
                 get: { r?.title ?? "" },
                 set: { t in recorder.update { $0.title = t; $0.titleTyped = !t.isEmpty } }), axis: .vertical)
-                .font(.titleSerif)
+                .font(.app(.docTitle))
                 .lineLimit(1...3)
                 .submitLabel(.done)
         }
@@ -285,7 +285,7 @@ struct ClassPicker: View {
             }
         } label: {
             HStack(spacing: 6) {
-                ClassDot(color: selection.map { app.color(of: $0) } ?? .secondary, size: 8)
+                Swatch(app.hue(of: selection))
                 Text(selection ?? app.words.anyClass).font(.subheadline.weight(.semibold))
                 Image(systemName: "chevron.up.chevron.down").font(.caption2.weight(.bold))
             }
@@ -310,7 +310,7 @@ private struct SentView: View {
                 .font(.system(size: 56))
                 .foregroundStyle(ok ? Color.green.gradient : Color.orange.gradient)
                 .symbolEffect(.bounce, value: ok)
-            Text(ok ? "Sent to \(app.libraryName)" : "Saved on this phone").font(.titleSerif)
+            Text(ok ? "Sent to \(app.libraryName)" : "Saved on this phone").font(.app(.docTitle))
             Text(ok ? "Notes are being written now. They'll be in your library in a minute or two."
                  : (recording.error ?? "It's sent as soon as your library can be reached."))
                 .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)

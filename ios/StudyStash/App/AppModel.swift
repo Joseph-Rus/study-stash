@@ -75,13 +75,30 @@ final class AppModel {
         showingRecorder = true
     }
 
-    /// Each class's place in the library, which is its colour.
+    /// Each class's place in the library, which picks its highlighter.
     var classIndex: [String: Int] = [:]
 
-    func color(of cls: String?) -> Color {
-        guard let cls else { return .secondary }
-        if cls == "Unsorted" { return .gray }
-        return (classIndex[cls] ?? classIndex[ClassMatch.normalized(cls)]).map { ClassColor.of($0) } ?? .accentColor
+    /// A class's highlighter (the desktop's for that class), or nil for none: Unsorted, or a name no class has. Show
+    /// it only as a `Swatch`, a `Highlight` behind the class's name, or the underline of its page's title.
+    func hue(of cls: String?) -> Highlighter? {
+        guard let cls, cls != "Unsorted" else { return nil }
+        return (classIndex[cls] ?? classIndex[ClassMatch.normalized(cls)]).map(Highlighter.init(classIndex:))
+    }
+
+    /// The class colour as a tint, from the look before. A class's colour is never a tint now (only a swatch, a
+    /// highlight or an underline): this is ink, so what still asks for it is drawn as the desktop draws it.
+    @available(*, deprecated, message: "A class's colour is only a Swatch, a Highlight or a FolderTitle's underline: use hue(of:); text and icons are ink")
+    func color(of cls: String?) -> Color { .ink }
+
+    /// The sidebar group a class is in on the computer ("" for Classes).
+    func group(of cls: String?) -> String? {
+        guard let cls else { return nil }
+        return classes.first { $0.name == cls }?.group
+    }
+
+    /// What a recording in `cls` is called: "lecture", "meeting" or "recording" (`Nouns`).
+    func noun(of cls: String?) -> String {
+        Nouns.of(folder: cls, group: group(of: cls), school: forSchool, work: words.work)
     }
 
     /// Every class, as the library last said.
@@ -118,9 +135,8 @@ final class AppModel {
         ResponseCache.shared.write("library", overview)
     }
 
-    func color(ofEvent e: UpcomingEvent) -> Color {
-        className(ofEvent: e).map { color(of: $0) } ?? .secondary
-    }
+    /// A calendar event's class's highlighter, or nil when it's no class's.
+    func hue(ofEvent e: UpcomingEvent) -> Highlighter? { hue(of: className(ofEvent: e)) }
 
     /// The class on the calendar right now (or starting in the next 10 minutes), to record for.
     func classNow(_ upcoming: Upcoming?) -> String? {
@@ -139,19 +155,19 @@ final class AppModel {
         if let s = overview.forSchool { forSchool = s }
     }
 
-    /// What the widgets show: the next classes and what's due next, with their colours.
+    /// What the widgets show: the next classes and what's due next, with their classes' highlighters ("blue").
     func writeGlance(upcoming: Upcoming?, due: DueList?) {
         let now = Date.now
         let events = (upcoming?.events ?? []).compactMap { e -> Glance.Event? in
             guard !e.allDay, let s = Format.parse(e.start), let end = Format.parse(e.end), end > now else { return nil }
             let cls = className(ofEvent: e)
-            return Glance.Event(title: e.title, className: cls, start: s, end: end, location: e.location, color: cls.map { color(of: $0).hexString })
+            return Glance.Event(title: e.title, className: cls, start: s, end: end, location: e.location, color: hue(of: cls)?.rawValue)
         }
         let open = (due?.groups ?? []).filter { ["overdue", "week", "later"].contains($0.key) }
             .flatMap { g in g.items.map { (item: $0, overdue: g.key == "overdue") } }
         let dueItems = open.compactMap { x -> Glance.Due? in
             guard let at = Format.parse(x.item.due) else { return nil }
-            return Glance.Due(name: x.item.name, className: x.item.class, due: at, overdue: x.overdue, color: color(of: x.item.class).hexString)
+            return Glance.Due(name: x.item.name, className: x.item.class, due: at, overdue: x.overdue, color: hue(of: x.item.class)?.rawValue)
         }
         Glance(library: libraryName, events: Array(events.prefix(6)), due: Array(dueItems.prefix(6)), toHandIn: due?.toHandIn ?? 0, updated: now).save()
         WidgetCenter.shared.reloadAllTimelines()

@@ -39,6 +39,10 @@ screens=(
   "study|-show study:demo-calc-ibp"
   "quiz|-show quiz:demo-calc-ibp"
   "widgets|-show widgets"
+  "components-1|-show components:1"
+  "components-2|-show components:2"
+  "components-3|-show components:3"
+  "components-4|-show components:4"
   "pair|-unpaired"
   "pair-code|-unpaired -pair-code"
 )

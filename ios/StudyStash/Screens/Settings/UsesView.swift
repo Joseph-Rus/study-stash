@@ -25,7 +25,7 @@ struct UsesView: View {
                 VStack(alignment: .leading, spacing: 18) {
                     if onboarding {
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("What will you use Study Stash for?").font(.titleSerif)
+                            Text("What will you use Study Stash for?").font(.app(.docTitle))
                             Text("Pick any that fit. School brings in classes, Canvas and what's due; anything else gets folders.")
                                 .font(.callout).foregroundStyle(.secondary)
                         }
@@ -54,7 +54,7 @@ struct UsesView: View {
                                         .foregroundStyle(on ? Color.accentColor : .secondary)
                                 }
                                 .padding(14)
-                                .background(.card, in: .rect(cornerRadius: 18, style: .continuous))
+                                .background(.surfaceSunken, in: .rect(cornerRadius: 18, style: .continuous))
                                 .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(on ? Color.accentColor : .clear, lineWidth: 2))
                             }
                             .buttonStyle(.plain)
@@ -65,7 +65,7 @@ struct UsesView: View {
                 .frame(maxWidth: 560)
                 .frame(maxWidth: .infinity)
             }
-            .background(.paper)
+            .background(.surface)
             .navigationTitle(onboarding ? "" : "What it's for")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

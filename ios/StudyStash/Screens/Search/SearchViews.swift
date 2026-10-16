@@ -36,7 +36,7 @@ struct SearchResultsView: View {
                     Section(app.words.classes) {
                         ForEach(r.classes) { c in
                             NavigationLink(value: Route.classDetail(c.name)) {
-                                Label { Text(c.name) } icon: { ClassDot(color: ClassColor.of(c.color), size: 12) }
+                                Label { Text(c.name) } icon: { Swatch(Highlighter(classIndex: c.color)) }
                             }
                         }
                     }
@@ -44,7 +44,7 @@ struct SearchResultsView: View {
                 if !r.lectures.isEmpty {
                     Section("Lectures") {
                         ForEach(r.lectures) { l in
-                            NavigationLink(value: Route.lecture(l.id)) { LectureCard(lecture: l, color: app.color(of: l.class)) }
+                            NavigationLink(value: Route.lecture(l.id)) { NoteRow(lecture: l, first: true) }
                         }
                     }
                 }
@@ -54,7 +54,7 @@ struct SearchResultsView: View {
                             NavigationLink(value: Route.lecture(p.id)) {
                                 VStack(alignment: .leading, spacing: 5) {
                                     HStack(spacing: 6) {
-                                        ClassDot(color: app.color(of: p.class), size: 7)
+                                        Swatch(app.hue(of: p.class), small: true)
                                         Text(p.title ?? "Lecture").font(.subheadline.weight(.semibold)).lineLimit(1)
                                         Spacer()
                                         Text(p.kind == "transcript" ? (p.at.map(Format.clock) ?? "Transcript") : p.section)
@@ -74,7 +74,7 @@ struct SearchResultsView: View {
             }
         }
         .scrollContentBackground(.hidden)
-        .background(.paper)
+        .background(.surface)
         .navigationTitle(live ? "Search" : query)
         .task(id: query) {
             let q = query.trimmingCharacters(in: .whitespaces)

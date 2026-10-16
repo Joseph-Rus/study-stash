@@ -23,11 +23,11 @@ struct ClassView: View {
                         }
                         ForEach(Format.grouped(list) { Format.lectureGroup($0.date) }, id: \.label) { group in
                             SectionHeading(title: group.label)
-                            Card(padding: 0) {
+                            Panel(padding: 0) {
                                 VStack(spacing: 0) {
                                     ForEach(Array(group.items.enumerated()), id: \.element.id) { i, l in
                                         NavigationLink(value: Route.lecture(l.id)) {
-                                            LectureCard(lecture: l, color: color, showClass: false)
+                                            NoteRow(lecture: l, showFolder: false, first: true)
                                                 .padding(.horizontal, 14).padding(.vertical, 8)
                                         }
                                         .buttonStyle(.plain)
@@ -48,7 +48,7 @@ struct ClassView: View {
             .frame(maxWidth: 760)
             .frame(maxWidth: .infinity)
         }
-        .background(.paper)
+        .background(.surface)
         .titleOnScroll(name)
         .refreshable { await load() }
         .task {
@@ -72,12 +72,12 @@ struct ClassView: View {
         let info = library?.value?.classes.first { $0.name == name }
         return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                ClassDot(color: color, size: 12)
+                Swatch(app.hue(of: name))
                 if let code = info?.code, !code.isEmpty {
                     Text(code).font(.subheadline.weight(.semibold)).foregroundStyle(color)
                 }
             }
-            Text(name).font(.display).lineLimit(3)
+            Text(name).font(.app(.date)).lineLimit(3)
             if let d = info?.description, !d.isEmpty {
                 Text(d).font(.callout).foregroundStyle(.secondary)
             }
@@ -98,7 +98,7 @@ struct AttachmentList: View {
     @State private var opening: String?
 
     var body: some View {
-        Card(padding: 0) {
+        Panel(padding: 0) {
             VStack(spacing: 0) {
                 ForEach(Array(files.enumerated()), id: \.element.id) { i, f in
                     Button { Task { await open(f) } } label: {

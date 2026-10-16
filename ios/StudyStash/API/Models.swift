@@ -22,12 +22,16 @@ struct Device: Codable, Sendable, Hashable, Identifiable {
     var lastSeen: String?
 }
 
-/// One class. `color` is the class's place in the library: its dot's colour.
+/// One class (a folder). `color` is the class's place in the library, which picks its highlighter
+/// (`Highlighter(classIndex:)`, the same as the desktop's).
 struct ClassInfo: Codable, Sendable, Hashable, Identifiable {
     var name: String
     var lectures: Int
     var color: Int
     var description: String?
+    /// The sidebar group it's in on the computer: "" for Classes, else "Clubs", "Work" or one of the student's own
+    /// (its notes are meetings there). Nil from a library before groups.
+    var group: String?
     /// The linked Canvas course's short code ("CSCI 321"), "" when there's none.
     var code: String?
     var aliases: [String]?

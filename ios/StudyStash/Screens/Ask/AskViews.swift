@@ -187,7 +187,7 @@ private struct AskThread: View {
                 .frame(maxWidth: .infinity)
             }
             .scrollDismissesKeyboard(.interactively)
-            .background(.paper)
+            .background(.surface)
             .onChange(of: conversation.turns.last?.answer) { _, _ in proxy.scrollTo("end", anchor: .bottom) }
             .onChange(of: conversation.turns.count) { _, _ in withAnimation { proxy.scrollTo("end", anchor: .bottom) } }
         }
@@ -203,7 +203,7 @@ private struct AskThread: View {
         VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 6) {
                 Image(systemName: "sparkles").font(.largeTitle).foregroundStyle(Color.accentColor.gradient).symbolEffect(.breathe)
-                Text("Ask about your notes").font(.titleSerif)
+                Text("Ask about your notes").font(.app(.docTitle))
                 Text("Answers come from what's in your library, with the lectures each one used.")
                     .font(.callout).foregroundStyle(.secondary)
             }
@@ -217,7 +217,7 @@ private struct AskThread: View {
                             Image(systemName: "arrow.up.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
                         }
                         .padding(14)
-                        .background(.card, in: .rect(cornerRadius: 16, style: .continuous))
+                        .background(.surfaceSunken, in: .rect(cornerRadius: 16, style: .continuous))
                     }
                     .buttonStyle(.plain)
                 }
@@ -232,7 +232,7 @@ private struct AskThread: View {
                     HStack(spacing: 6) {
                         chip("All classes", on: scope == .everything) { scope = .everything }
                         ForEach(classes) { c in
-                            chip(c.name, on: scope == .class(c.name), color: ClassColor.of(c.color)) {
+                            chip(c.name, on: scope == .class(c.name), hue: Highlighter(classIndex: c.color)) {
                                 scope = scope == .class(c.name) ? .everything : .class(c.name)
                             }
                         }
@@ -265,17 +265,17 @@ private struct AskThread: View {
         .padding(.bottom, 6)
     }
 
-    private func chip(_ text: String, on: Bool, color: Color = .accentColor, action: @escaping () -> Void) -> some View {
+    private func chip(_ text: String, on: Bool, hue: Highlighter? = nil, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 5) {
-                if text != "All classes" { ClassDot(color: color, size: 7) }
+                if text != "All classes" { Swatch(hue, small: true) }
                 Text(text).font(.footnote.weight(.medium)).lineLimit(1)
             }
             .padding(.horizontal, 11).padding(.vertical, 6)
         }
         .buttonStyle(.plain)
-        .foregroundStyle(on ? Color.white : .primary)
-        .background(on ? AnyShapeStyle(color.gradient) : AnyShapeStyle(.regularMaterial), in: .capsule)
+        .foregroundStyle(on ? Color.surface : .ink)
+        .background(on ? AnyShapeStyle(Color.ink) : AnyShapeStyle(.regularMaterial), in: .capsule)
     }
 
     private func send(_ text: String) {
@@ -321,7 +321,7 @@ private struct TurnView: View {
                     Text("From").font(.caption.weight(.semibold)).foregroundStyle(.secondary).textCase(.uppercase)
                     ForEach(Array(turn.sources.enumerated()), id: \.offset) { _, s in
                         let row = HStack(spacing: 8) {
-                            ClassDot(color: app.color(of: s.class), size: 7)
+                            Swatch(app.hue(of: s.class), small: true)
                             Text(s.title).font(.footnote.weight(.medium)).lineLimit(1)
                             Spacer()
                             Text([s.date.flatMap(Format.parse).map { Format.shortDate($0) }, s.at.map(Format.clock)]
@@ -329,7 +329,7 @@ private struct TurnView: View {
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                         .padding(.horizontal, 12).padding(.vertical, 9)
-                        .background(.card, in: .rect(cornerRadius: 12, style: .continuous))
+                        .background(.surfaceSunken, in: .rect(cornerRadius: 12, style: .continuous))
                         if let id = s.id {
                             NavigationLink(value: Route.lecture(id)) { row }.buttonStyle(.plain)
                         } else {
@@ -351,7 +351,7 @@ struct MarkdownText: View {
         VStack(alignment: .leading, spacing: 8) {
             ForEach(Array(Self.blocks(text).enumerated()), id: \.offset) { _, block in
                 switch block {
-                case .heading(let s): inline(s).font(.headlineSerif).padding(.top, 4)
+                case .heading(let s): inline(s).font(.app(.title)).padding(.top, 4)
                 case .bullet(let s, let depth):
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text("•").foregroundStyle(.tint)

@@ -62,7 +62,7 @@ private struct DueList_: View {
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
-        .background(.paper)
+        .background(.surface)
         .navigationTitle("Due")
         .navigationSubtitle(due.value.map { "\($0.toHandIn) to hand in" + ($0.synced.map { " · synced \(Format.ago($0))" } ?? "") } ?? "")
         .refreshable { await load() }
@@ -83,7 +83,7 @@ private struct DueRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            ClassDot(color: app.color(of: item.class)).padding(.top, 6)
+            Swatch(app.hue(of: item.class)).padding(.top, 6)
             VStack(alignment: .leading, spacing: 4) {
                 Text(item.name).font(.body.weight(.medium)).lineLimit(2)
                 HStack(spacing: 6) {
@@ -122,7 +122,7 @@ struct AssignmentView: View {
                 Loaded(resource: detail, failure: "Couldn't load this assignment") { a in content(a) }
             }
         }
-        .background(.paper)
+        .background(.surface)
         .titleOnScroll(detail?.value?.name ?? "", after: 150)
         .toolbar {
             if let url = detail?.value.flatMap({ URL(string: $0.url) }) {
@@ -142,10 +142,10 @@ struct AssignmentView: View {
         let color = app.color(of: a.class)
         return VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 6) {
-                ClassDot(color: color, size: 8)
+                Swatch(app.hue(of: a.class))
                 Text(a.class).font(.subheadline.weight(.semibold)).foregroundStyle(color)
             }
-            Text(a.name).font(.display)
+            Text(a.name).font(.app(.date))
             HStack(spacing: 10) {
                 fact("calendar", Format.dueWhen(a.due), a.missing ? .red : .primary)
                 if let p = a.points { fact("star", "\(p.formatted()) pts", .primary) }
@@ -159,7 +159,7 @@ struct AssignmentView: View {
             }
             if !a.rubric.isEmpty {
                 SectionHeading(title: "Rubric")
-                Card(padding: 0) {
+                Panel(padding: 0) {
                     VStack(spacing: 0) {
                         ForEach(Array(a.rubric.enumerated()), id: \.offset) { i, r in
                             HStack(alignment: .top) {
@@ -181,7 +181,7 @@ struct AssignmentView: View {
             if !a.comments.isEmpty {
                 SectionHeading(title: "Comments")
                 ForEach(Array(a.comments.enumerated()), id: \.offset) { _, c in
-                    Card {
+                    Panel {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(c.author).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                             Text(c.text).font(.callout)
@@ -207,6 +207,6 @@ struct AssignmentView: View {
             .font(.footnote.weight(.medium))
             .foregroundStyle(color)
             .padding(.horizontal, 10).padding(.vertical, 6)
-            .background(.card, in: .capsule)
+            .background(.surfaceSunken, in: .capsule)
     }
 }

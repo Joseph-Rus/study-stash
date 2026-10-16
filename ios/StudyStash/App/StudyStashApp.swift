@@ -5,17 +5,22 @@ import UserNotifications
 @main
 struct StudyStashApp: App {
     @State private var app = AppModel()
-    @AppStorage("theme") private var themeName = ColourTheme.lagoon.name
+    /// Light, dark, or as the phone is (Settings' choice).
+    @AppStorage(Appearance.key) private var appearance = Appearance.system.rawValue
 
     init() {
         UNUserNotificationCenter.current().delegate = NotificationRouter.shared
+        SystemLook.apply()
     }
 
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environment(app)
-                .tint(ColourTheme.named(themeName).accent)
+                // The desktop's look: no accent (the tint is ink), one typeface, the page's white behind.
+                .tint(.ink)
+                .font(.app(.body))
+                .preferredColorScheme(Appearance(rawValue: appearance)?.scheme)
                 .task { NotificationRouter.shared.app = app }
         }
         .backgroundTask(.appRefresh(Reminders.refreshTask)) {
@@ -72,11 +77,12 @@ struct MainTabs: View {
 
     var body: some View {
         TabView(selection: $tab) {
-            Tab("Library", systemImage: "books.vertical", value: .library) { LibraryTab() }
-            if app.forSchool { Tab("Due", systemImage: "checklist", value: .due) { DueTab() } }
-            Tab("Ask", systemImage: "sparkles", value: .ask) { AskTab() }
-            Tab("Settings", systemImage: "gearshape", value: .settings) { SettingsTab() }
-            Tab(value: .search, role: .search) { SearchTab() }
+            // The desktop's names and icons: Home and Due as its sidebar has them.
+            Tab("Home", image: "home", value: .library) { LibraryTab() }
+            if app.forSchool { Tab("Due", image: "event_upcoming", value: .due) { DueTab() } }
+            Tab("Ask", image: "chat", value: .ask) { AskTab() }
+            Tab("Settings", image: "settings", value: .settings) { SettingsTab() }
+            Tab("Search", image: "search", value: .search, role: .search) { SearchTab() }
         }
         .tabViewStyle(.sidebarAdaptable)
         .tabBarMinimizeBehavior(.onScrollDown)
@@ -103,6 +109,7 @@ struct MainTabs: View {
             switch s {
             case let .study(id, _): StudyView(lectureID: id, title: DebugSamples.title(of: id))
             case .notebook: NotebookEditor(id: DebugSamples.notebook())
+            case .components(let page): ComponentGallery(page: page)
             default: WidgetGallery()
             }
         }

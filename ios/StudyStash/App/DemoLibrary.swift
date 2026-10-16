@@ -115,13 +115,15 @@ final class DemoLibrary: URLProtocol, @unchecked Sendable {
     struct DemoLecture {
         var id, title, cls: String
         var daysAgo: Int
+        /// When it started that day ("9:00 AM").
+        var hour = 9
         var minutes: Int
         var topics: [String]
         var summaryText: String
         var html: String
         var transcript: String
 
-        var date: String { DemoLibrary.day(-daysAgo) }
+        var date: String { DemoLibrary.day(-daysAgo, at: hour) }
         var summary: [String: Any] {
             ["id": id, "title": title, "class": cls, "date": date, "seconds": minutes * 60, "owner": "You", "status": "done",
              "summary": summaryText, "topics": topics, "has_transcript": true]
@@ -129,11 +131,12 @@ final class DemoLibrary: URLProtocol, @unchecked Sendable {
     }
 
     static let classes = ["Calculus II", "Intro to Psychology", "Organic Chemistry"]
+    /// Each one's highlighter by its place, as on the desktop: yellow, green, orange.
 
     static var overview: [String: Any] {
-        ["name": "Demo library", "version": "demo", "unsorted": 0, "writing": 0, "ask": true, "notes_model": "Claude", "uses": ["student"], "for_school": true,
+        ["name": "Demo library", "version": "demo", "unsorted": lectures.filter { $0.cls == "Unsorted" }.count, "writing": 0, "ask": true, "notes_model": "Claude", "uses": ["student"], "for_school": true,
          "classes": classes.enumerated().map { i, c in
-             ["name": c, "lectures": lectures.filter { $0.cls == c }.count, "color": i, "description": "", "code": ["MATH 162", "PSYC 101", "CHEM 231"][i], "aliases": []] as [String: Any]
+             ["name": c, "lectures": lectures.filter { $0.cls == c }.count, "color": i, "description": "", "group": "", "code": ["MATH 162", "PSYC 101", "CHEM 231"][i], "aliases": []] as [String: Any]
          }]
     }
 
@@ -149,7 +152,7 @@ final class DemoLibrary: URLProtocol, @unchecked Sendable {
                     <h2>Questions to review</h2><ol><li>Why does LIATE put logarithms first?</li><li>Evaluate ∫ x cos x dx.</li><li>When does integration by parts loop back to the original integral, and how do you finish?</li></ol>
                     """,
                     transcript: "[00:00] Alright, let's get going. Today is integration by parts.\n[00:12] It's really just the product rule run backwards.\n[03:40] So how do you choose u? There's a rule of thumb, LIATE.\n[09:15] Let's do x e to the x together.\n[21:30] When u is a polynomial, the tabular method is a lifesaver."),
-        DemoLecture(id: "demo-psych-memory", title: "Memory: Encoding, Storage and Retrieval", cls: "Intro to Psychology", daysAgo: 2, minutes: 74,
+        DemoLecture(id: "demo-psych-memory", title: "Memory: Encoding, Storage and Retrieval", cls: "Intro to Psychology", daysAgo: 2, hour: 11, minutes: 74,
                     topics: ["Working memory", "Levels of processing", "Misinformation effect"],
                     summaryText: "The three stages of memory, why deeper processing sticks, and how memories get rewritten.",
                     html: """
@@ -159,7 +162,12 @@ final class DemoLibrary: URLProtocol, @unchecked Sendable {
                     <h2>Announcements</h2><ul><li>Essay on eyewitness testimony due in ten days.</li></ul>
                     """,
                     transcript: "[00:00] Today: how memory actually works.\n[05:20] Working memory holds about four chunks.\n[31:10] Loftus and Palmer — smashed versus hit.\n[70:02] The essay is due in ten days."),
-        DemoLecture(id: "demo-chem-sn", title: "SN1 vs SN2: Substitution Mechanisms", cls: "Organic Chemistry", daysAgo: 4, minutes: 50,
+        DemoLecture(id: "demo-unsorted-study-group", title: "", cls: "Unsorted", daysAgo: 3, hour: 16, minutes: 18,
+                    topics: ["Exam plan", "Practice problems"],
+                    summaryText: "A study group planning the week before the calculus midterm: who takes which practice set, and when to meet.",
+                    html: "<h2>Summary</h2><p>Planning for the calculus midterm: split the practice problems, meet Thursday to go through integration by parts.</p>",
+                    transcript: "[00:00] Okay, so the midterm is next Friday.\n[02:10] I'll take the integration by parts set.\n[11:45] Thursday at four in the library?"),
+        DemoLecture(id: "demo-chem-sn", title: "SN1 vs SN2: Substitution Mechanisms", cls: "Organic Chemistry", daysAgo: 4, hour: 13, minutes: 50,
                     topics: ["SN1", "SN2", "Carbocations", "Stereochemistry"],
                     summaryText: "When substitution happens in one step or two, and how to tell from the substrate and solvent.",
                     html: """
@@ -200,6 +208,11 @@ final class DemoLibrary: URLProtocol, @unchecked Sendable {
     static func iso(_ offset: TimeInterval) -> String { ISO8601DateFormatter().string(from: .now.addingTimeInterval(offset)) }
     static func day(_ days: Int) -> String {
         let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.locale = Locale(identifier: "en_US_POSIX")
+        return f.string(from: .now.addingTimeInterval(Double(days) * 86_400))
+    }
+    /// That day at `hour` o'clock, local time ("2026-10-15T09:00:00").
+    static func day(_ days: Int, at hour: Int) -> String {
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd'T'\(String(format: "%02d", hour)):00:00"; f.locale = Locale(identifier: "en_US_POSIX")
         return f.string(from: .now.addingTimeInterval(Double(days) * 86_400))
     }
     static func localISO(_ inDays: Int) -> String {

@@ -1,9 +1,8 @@
 import SwiftUI
 
-/// Which library this is, the app's colour, this phone, and removing it.
+/// Which library this is, this phone, and removing it.
 struct SettingsTab: View {
     @Environment(AppModel.self) private var app
-    @AppStorage("theme") private var themeName = ColourTheme.lagoon.name
     @State private var me: Me?
     @State private var confirming = false
     @State private var reminderTick = 0
@@ -38,33 +37,6 @@ struct SettingsTab: View {
                     }
                 }
 
-                Section("Colour") {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 44), spacing: 12)], spacing: 12) {
-                        ForEach(ColourTheme.all) { t in
-                            Button {
-                                withAnimation { themeName = t.name }
-                                UISelectionFeedbackGenerator().selectionChanged()
-                            } label: {
-                                Circle()
-                                    .fill(t.accent.gradient)
-                                    .frame(width: 36, height: 36)
-                                    .overlay {
-                                        if t.name == themeName {
-                                            Image(systemName: "checkmark").font(.footnote.weight(.bold))
-                                                .foregroundStyle(t.isLight ? .black : .white)
-                                        }
-                                    }
-                                    .padding(3)
-                                    .overlay(Circle().strokeBorder(t.name == themeName ? t.accent : .clear, lineWidth: 2))
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel(t.name)
-                        }
-                    }
-                    .padding(.vertical, 6)
-                    Text(themeName).font(.footnote).foregroundStyle(.secondary)
-                }
-
                 Section {
                     Toggle("When a class starts, offer to record", isOn: Binding(get: { Reminders.Settings.classStart }, set: { Reminders.Settings.classStart = $0; reschedule() }))
                     Toggle("Work due: the evening before and 2 hours before", isOn: Binding(get: { Reminders.Settings.due }, set: { Reminders.Settings.due = $0; reschedule() }))
@@ -94,7 +66,7 @@ struct SettingsTab: View {
                 }
             }
             .scrollContentBackground(.hidden)
-            .background(.paper)
+            .background(.surface)
             .navigationTitle("Settings")
             .task { me = try? await app.api?.me() }
             .id(reminderTick)

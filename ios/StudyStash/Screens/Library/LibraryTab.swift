@@ -61,7 +61,7 @@ private struct LibraryHome: View {
             .frame(maxWidth: 760)
             .frame(maxWidth: .infinity)
         }
-        .background(.paper)
+        .background(.surface)
         .navigationTitle("Library")
         .navigationSubtitle(app.libraryName)
         .toolbar {
@@ -105,7 +105,7 @@ private struct LibraryHome: View {
 
         if nextEvent != nil || !dueItems.isEmpty {
             SectionHeading(title: "Up next")
-            Card(padding: 0) {
+            Panel(padding: 0) {
                 VStack(spacing: 0) {
                     if let e = nextEvent {
                         HStack(spacing: 12) {
@@ -123,7 +123,7 @@ private struct LibraryHome: View {
                                     .font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
                             }
                             Spacer()
-                            ClassDot(color: app.color(ofEvent: e))
+                            Swatch(app.hue(ofEvent: e))
                         }
                         .padding(14)
                         if !dueItems.isEmpty { Divider().padding(.leading, 70) }
@@ -164,11 +164,11 @@ private struct LibraryHome: View {
     @ViewBuilder private var recentSection: some View {
         if let lectures = recent.value, !lectures.isEmpty {
             SectionHeading(title: "Recent \(app.words.lectures)")
-            Card(padding: 0) {
+            Panel(padding: 0) {
                 VStack(spacing: 0) {
                     ForEach(Array(lectures.enumerated()), id: \.element.id) { i, l in
                         NavigationLink(value: Route.lecture(l.id)) {
-                            LectureCard(lecture: l, color: app.color(of: l.class))
+                            NoteRow(lecture: l, first: true)
                                 .padding(.horizontal, 14).padding(.vertical, 8)
                         }
                         .buttonStyle(.plain)
@@ -193,7 +193,7 @@ private struct LibraryHome: View {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 158), spacing: 12)], spacing: 12) {
                     ForEach(overview.classes) { c in
                         NavigationLink(value: Route.classDetail(c.name)) {
-                            ClassTile(name: c.name, code: c.code, lectures: c.lectures, color: ClassColor.of(c.color))
+                            ClassTile(name: c.name, code: c.code, lectures: c.lectures, color: Highlighter(classIndex: c.color).swatch)
                         }
                         .buttonStyle(.plain)
                     }
@@ -240,7 +240,7 @@ struct ClassTile: View {
             }
             Spacer(minLength: 18)
             Text(name)
-                .font(.headlineSerif)
+                .font(.app(.title))
                 .foregroundStyle(.primary)
                 .lineLimit(2)
                 .multilineTextAlignment(.leading)
@@ -252,7 +252,7 @@ struct ClassTile: View {
         .padding(14)
         .frame(maxWidth: .infinity, minHeight: 124, alignment: .leading)
         .background {
-            RoundedRectangle(cornerRadius: 22, style: .continuous).fill(.card)
+            RoundedRectangle(cornerRadius: 22, style: .continuous).fill(.surfaceSunken)
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .fill(LinearGradient(colors: [color.opacity(0.16), color.opacity(0.02)], startPoint: .topLeading, endPoint: .bottomTrailing))
         }
@@ -272,7 +272,7 @@ struct OnThisPhone: View {
         let list = store.unsent.filter { $0.state != .recording }
         if !list.isEmpty {
             SectionHeading(title: "On this phone")
-            Card(padding: 0) {
+            Panel(padding: 0) {
                 VStack(spacing: 0) {
                     ForEach(Array(list.enumerated()), id: \.element.id) { i, r in
                         HStack(spacing: 12) {

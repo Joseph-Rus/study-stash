@@ -1,9 +1,13 @@
 import SwiftUI
 
-/// A calendar event: its class's colour, title, when and where; when the library didn't match a class but the title
-/// looks like one, that class as a suggestion to confirm; and a menu to file every event with this title in a class.
+/// A calendar event, as the desktop's Up next (`.event`): its time over its day, then its title and its class as a
+/// highlight (an event that's just its class's name shows the name once, as the highlight). The whole row is the
+/// button: a tap records it, into its class. One starting within a quarter of an hour says "In 11 minutes" in ink.
+/// When the library didn't match a class but the title looks like one, a link offers to file every one like it; a
+/// long press (or a swipe) files them in any class.
 struct EventRow: View {
     @Environment(AppModel.self) private var app
+    @Environment(\.horizontalSizeClass) private var sizeClass
     var event: UpcomingEvent
     /// Offer the class it looks like (only on the first of a run of same-titled events).
     var suggest = true
@@ -13,42 +17,71 @@ struct EventRow: View {
 
     var body: some View {
         let cls = filed ?? app.className(ofEvent: event)
-        HStack(spacing: 12) {
-            RoundedRectangle(cornerRadius: 2).fill((cls.map { app.color(of: $0) } ?? .secondary).gradient).frame(width: 4, height: 36)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(event.title).font(.body.weight(.medium)).lineLimit(1)
-                Text([Format.dayLabel(Format.parse(event.start) ?? .now), Format.timeRange(event.start, event.end, allDay: event.allDay), event.location]
-                    .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
-                    .font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
-                if suggest, filed == nil, event.class == nil, let s = app.suggestion(forEvent: event) {
-                    Button { Task { await file(in: s) } } label: {
-                        Label("File every one in \(s)?", systemImage: "wand.and.stars")
-                            .font(.caption.weight(.semibold))
-                            .lineLimit(1)
-                            .foregroundStyle(app.color(of: s))
+        let start = Format.parse(event.start) ?? .now
+        let end = Format.parse(event.end) ?? start
+        let on = start <= .now && .now < end
+        let soon = !on && start.timeIntervalSinceNow <= 15 * 60 && start > .now
+        let day = on ? "Now" : soon ? Nouns.capital(Format.inMinutes(start.timeIntervalSinceNow)) : Format.day(start)
+        let titleIsClass = cls.map { ClassMatch.normalized($0) == ClassMatch.normalized(event.title) } ?? false
+
+        VStack(alignment: .leading, spacing: 6) {
+            Button { app.record(for: cls) } label: {
+                HStack(alignment: .center, spacing: sizeClass == .regular ? 20 : 14) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(event.allDay ? "All day" : Format.time(start)).textStyle(.when)
+                            .foregroundStyle(soon || on ? Color.ink : .inkMuted)
+                        Text(day).textStyle(.micro)
+                            .foregroundStyle(soon || on ? Color.ink : .inkSubtle)
                     }
-                    .buttonStyle(.plain)
-                    .padding(.top, 2)
+                    .frame(width: sizeClass == .regular ? 108 : 84, alignment: .leading)
+                    FlowLayout(spacing: 8) {
+                        if titleIsClass, let cls {
+                            Highlight(cls, hue: app.hue(of: cls), style: .title)
+                        } else {
+                            Text(event.title).textStyle(.title).foregroundStyle(.ink)
+                            if let cls { Highlight(cls, hue: app.hue(of: cls)) }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    if filing { ProgressView().tint(.inkSubtle) }
                 }
+                .padding(.vertical, 10)
+                .contentShape(.rect)
             }
-            Spacer(minLength: 0)
-            if filing { ProgressView() }
+            .buttonStyle(.row)
+            .accessibilityLabel(said(cls, start: start, on: on, soon: soon))
+            .accessibilityHint("Starts recording")
+
+            if suggest, filed == nil, event.class == nil, let s = app.suggestion(forEvent: event) {
+                Button("File every one in \(s)") { Task { await file(in: s) } }
+                    .buttonStyle(.textLink)
+                    .padding(.leading, sizeClass == .regular ? 128 : 98)
+                    .padding(.bottom, 6)
+            }
         }
         .contextMenu { menu }
         .swipeActions(edge: .trailing) {
-            Menu { menu } label: { Label("File", systemImage: "folder") }.tint(.accentColor)
+            Menu { menu } label: { Label("File", icon: "drive_file_move") }.tint(.inkMuted)
         }
+    }
+
+    /// "Record Capstone team sync as a lecture, starts in 11 minutes".
+    private func said(_ cls: String?, start: Date, on: Bool, soon: Bool) -> String {
+        let day = Format.day(start)
+        let when = on ? "on now" : soon ? "starts \(Format.inMinutes(start.timeIntervalSinceNow))"
+            : "\(["Today", "Tomorrow"].contains(day) ? day.lowercased() : "on \(day)") at \(Format.time(start))"
+        return "Record \(event.title) as a \(app.noun(of: cls)), \(when)"
     }
 
     @ViewBuilder private var menu: some View {
         Section("Every “\(event.title)” goes in") {
             ForEach(app.classes) { c in
                 Button { Task { await file(in: c.name) } } label: {
-                    if (filed ?? app.className(ofEvent: event)) == c.name { Label(c.name, systemImage: "checkmark") } else { Text(c.name) }
+                    if (filed ?? app.className(ofEvent: event)) == c.name { Label(c.name, icon: "check") } else { Text(c.name) }
                 }
             }
         }
-        Button { app.record(for: filed ?? app.className(ofEvent: event)) } label: { Label("Record it", systemImage: "mic.fill") }
+        Button { app.record(for: filed ?? app.className(ofEvent: event)) } label: { Label("Record it", icon: "mic") }
     }
 
     private func file(in cls: String) async {
