@@ -286,8 +286,9 @@ private struct DuePage: View {
     @State private var weekStart: Date
     /// The day the month lists under its grid.
     @State private var chosen: Date
-    /// The class the calendar is for; nil for every class.
-    @State private var only: String?
+    /// The class the calendar is for; nil for every class. It's the app's, so a class page's "See these on the
+    /// calendar" (`app.showDue(class:)`) opens Due on that class, and the filter here is the same thing.
+    private var only: String? { app.dueFilter }
 
     init(api: APIClient, open: @escaping (Route) -> Void) {
         self.api = api
@@ -361,8 +362,6 @@ private struct DuePage: View {
         .titleOnScroll("Due", after: 44)
         .refreshable { await load() }
         .task { await load() }
-        // FLOWS: after the merge, the class page's "See these on the calendar" arrives as app.dueFilter
-        // (app.showDue(class:)): .onChange(of: app.dueFilter, initial: true) { _, c in if let c { only = c; chosenView = .week } }
     }
 
     /// The sentence, then when Canvas last synced (or that it failed, with Try again).
@@ -435,13 +434,13 @@ private struct DuePage: View {
     private func filter(_ book: DueBook) -> some View {
         let names = book.classes(order: app.classes.map(\.name))
         return Menu {
-            Button { only = nil } label: {
+            Button { app.dueFilter = nil } label: {
                 if only == nil { Label("All classes", icon: "check") } else { Text("All classes") }
             }
             if !names.isEmpty {
                 Section {
                     ForEach(names, id: \.self) { name in
-                        Button { only = name } label: {
+                        Button { app.dueFilter = name } label: {
                             Label {
                                 Text(name)
                             } icon: {
@@ -525,8 +524,7 @@ private struct DuePage: View {
     /// its class.
     private func meeting(_ m: DueMeeting) {
         if m.end > .now {
-            // FLOWS: after the merge, app.record(for: m.cls, title: m.title) so the recording is titled from the event.
-            app.record(for: m.cls)
+            app.record(for: m.cls, title: "\(m.title), \(Format.words(m.start, "EEE d MMM"))")
         } else {
             open(.classDetail(m.cls))
         }
@@ -947,6 +945,7 @@ private struct DeskDay: View {
             }
         }
         .padding(isToday ? -3 : 0)
+        .onChange(of: app.dismissal) { showingMore = false }
     }
 
     private func item(_ e: DueEntry, then: (() -> Void)? = nil) -> some View {
@@ -1256,10 +1255,14 @@ struct AssignmentView: View {
         .foregroundStyle(.ink)
         .page()
         .titleOnScroll(detail?.value?.name ?? "", after: 110)
-        // FLOWS: Ask how to start this sends its question on open, once the Ask sheet takes one (ask-search lane):
-        // "How should I start {name}? Use what was said in my lectures."
+        // FLOWS: Ask how to start this sends its question on open, and a source opens the lecture at its moment on
+        // this tab, once the ask-search lane's AskSheet(scope:question:onMoment:) is merged:
+        // AskSheet(scope: .class(className), question: "How should I start \(name)? Use what was said in my lectures.",
+        //          onMoment: { id, at in app.go(.lecture(id, at: at), tab: app.tab) })
         .sheet(isPresented: $asking) { AskSheet(scope: .class(className)) }
-        // FLOWS: after the merge, .recordsInto(className): the Record bar records into this assignment's class.
+        .onChange(of: app.dismissal) { asking = false }
+        // The Record bar records into this assignment's class.
+        .recordsInto(className)
         .refreshable { await load() }
         .task { await load() }
     }
