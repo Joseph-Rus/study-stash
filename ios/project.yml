@@ -1,0 +1,68 @@
+# Study Stash for iPhone and iPad. `xcodegen` turns this into StudyStash.xcodeproj (not checked in).
+name: StudyStash
+options:
+  bundleIdPrefix: app.studystash
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    SWIFT_STRICT_CONCURRENCY: complete
+targets:
+  StudyStash:
+    type: application
+    platform: iOS
+    sources:
+      - path: StudyStash
+        excludes: [Resources/Notes]
+      # KaTeX's stylesheet finds its fonts at fonts/…: kept as a folder in the app, not flattened.
+      - path: StudyStash/Resources/Notes
+        type: folder
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.studystash.ios
+        PRODUCT_NAME: StudyStash
+        TARGETED_DEVICE_FAMILY: "1,2"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Study Stash
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: UIInterfaceOrientationPortrait
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        INFOPLIST_KEY_NSCameraUsageDescription: Scan the QR code Study Stash shows on your computer to add this phone.
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: Record lectures so Study Stash can write notes from them.
+        INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: Write down what's said in a lecture, on this phone.
+        INFOPLIST_KEY_NSLocalNetworkUsageDescription: Reach the Study Stash library on your computer.
+    info:
+      path: StudyStash/Info.plist
+      properties:
+        # The library is on the student's own tailnet: plain http at its Tailscale IP when https (Tailscale Serve)
+        # isn't set up. Tailscale encrypts that traffic itself.
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+        UIBackgroundModes: [audio]
+  StudyStashTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [StudyStashTests]
+    dependencies:
+      - target: StudyStash
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: app.studystash.ios.tests
+schemes:
+  StudyStash:
+    build:
+      targets:
+        StudyStash: all
+        StudyStashTests: [test]
+    test:
+      targets: [StudyStashTests]
