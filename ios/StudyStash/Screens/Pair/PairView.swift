@@ -47,6 +47,14 @@ struct PairView: View {
                 path.append(.address)
             }
         }
+        .onAppear {
+            // The sample classes ended to connect a computer: straight to "On your computer" (Back is Welcome).
+            guard app.setupAtConnect else { return }
+            app.setupAtConnect = false
+            var t = Transaction()
+            t.disablesAnimations = true
+            withTransaction(t) { path = [.connect] }
+        }
         .task {
             // Pictures of the last steps: the demo library stands in for a library just joined.
             if SetupDebug.joins, joined == nil {

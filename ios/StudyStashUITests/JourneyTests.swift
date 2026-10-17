@@ -21,6 +21,9 @@ final class JourneyTests: XCTestCase {
         // A phone's tabs are Home, Due, Ask and Search: the classes are an iPad's sidebar, never a More tab.
         XCTAssertEqual(app.tabBars.buttons.count, 4, "four tabs")
         XCTAssertFalse(app.tabBars.buttons["More"].exists, "no More tab")
+        // Connect your computer ends the sample classes on setup's "On your computer" step.
+        tap(app.buttons["Connect your computer"], "the banner's Connect your computer")
+        expect(app.staticTexts["Open Study Stash on your computer"], "setup's On your computer step")
     }
 
     // MARK: recording

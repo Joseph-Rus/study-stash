@@ -428,6 +428,15 @@ final class AppModel {
         paired(base: DemoLibrary.base, library: Me.Library(name: "Demo library", version: "demo"))
     }
 
+    /// The sample classes ended to connect a computer: setup opens on "Open Study Stash on your computer", not Welcome.
+    var setupAtConnect = false
+
+    /// Connect your computer, from the sample classes (Home's banner, Settings): the demo ends, setup's second step.
+    func endDemo() async {
+        setupAtConnect = true
+        await forget()
+    }
+
     /// The library no longer knows this phone (removed in Settings), or the student chose to forget it.
     func signedOut() {
         guard phase != .unpaired else { return }

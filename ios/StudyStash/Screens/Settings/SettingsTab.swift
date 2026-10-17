@@ -115,9 +115,8 @@ struct SettingsTab: View {
                         Text("Connect your computer to read your own lectures here, and record into your library.")
                             .font(.atkinson(13, relativeTo: .footnote)).foregroundStyle(.inkMuted)
                             .fixedSize(horizontal: false, vertical: true)
-                        // FLOWS: ends the demo and goes to setup's "Open Study Stash on your computer" step (setup
-                        // lane); until setup can open on that step, it lands on Welcome.
-                        Button("Connect your computer") { Task { await app.forget() } }
+                        // Ends the demo and goes to setup's "Open Study Stash on your computer" step.
+                        Button("Connect your computer") { Task { await app.endDemo() } }
                             .buttonStyle(.pill(small: true, ink: true))
                             .padding(.top, 10)
                     }

@@ -174,8 +174,8 @@ private struct LibraryHome: View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
             Text("These are sample classes.").textStyle(.meta).foregroundStyle(.inkMuted)
             Spacer(minLength: 8)
-            // FLOWS: setup opens on its "On your computer" step after the demo ends (setup lane).
-            Button("Connect your computer") { Task { await app.forget() } }.buttonStyle(.textLink)
+            // The demo ends and setup opens on its "On your computer" step.
+            Button("Connect your computer") { Task { await app.endDemo() } }.buttonStyle(.textLink)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
