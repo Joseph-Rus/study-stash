@@ -34,6 +34,10 @@ PHONE_NAMES = {
     "work": "briefcase",                      # what it's for: work
     "science": "flask-conical",               # what it's for: research
     "person": "user",                         # what it's for: personal
+    "redo": "redo-2",                         # a notebook: redo
+    "grid_view": "layout-grid",               # a notebook: its pages
+    "pan_tool": "hand",                       # a notebook: draw with a finger
+    "arrow_downward": "arrow-down",           # a notebook: move a page later
 }
 
 
