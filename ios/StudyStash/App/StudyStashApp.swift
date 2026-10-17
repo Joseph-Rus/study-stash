@@ -83,6 +83,9 @@ struct MainTabs: View {
     @Environment(AppModel.self) private var app
     /// Light or dark, for the swatches in an iPad's sidebar (pictures, so they don't follow it themselves).
     @Environment(\.colorScheme) private var scheme
+    /// The classes are tabs only where there's a sidebar (an iPad, not split narrow): a phone counted them as tabs and
+    /// put a More tab in its bar.
+    @Environment(\.horizontalSizeClass) private var sizeClass
     #if DEBUG
     @State private var debugSheet: DebugScreen?
     @State private var debugCover: DebugScreen?
@@ -98,6 +101,10 @@ struct MainTabs: View {
         .tabViewSidebarBottomBar { SidebarFooter() }
         .tabBarMinimizeBehavior(.onScrollDown)
         .modifier(RecordBar(enabled: app.tab != .ask && !app.recordBarHidden))
+        // A class's tab goes when the sidebar does (an iPad split narrow): its page shows on Home instead.
+        .onChange(of: sizeClass) { _, size in
+            if size != .regular, case .folder(let name) = app.tab { app.go(.classDetail(name), tab: .home, root: true) }
+        }
         #if DEBUG
         // What it's for is a step of setup, or a row on Home for a library never told: never a sheet at launch. This
         // one is only for pictures (`-show uses`).
@@ -177,7 +184,7 @@ struct MainTabs: View {
         if app.forSchool { Tab("Due", image: "event_upcoming", value: TabID.due) { DueTab() } }
         Tab("Ask", image: "chat", value: TabID.ask) { AskTab() }
         Tab("Search", image: "search", value: TabID.search, role: .search) { SearchTab() }
-        folderSections
+        if sizeClass == .regular { folderSections }
     }
 
     /// An iPad's sidebar: each class under its group, as the desktop's sidebar (never in a phone's tab bar).
