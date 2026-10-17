@@ -349,6 +349,11 @@ one) and `-quiet` (no notification prompt):
 - `-ask "<question>"` with `-tab ask`; `-unpaired` (setup, no `-demo`), with `-pair-code` its second step
 - `-fake-mic`: made-up lines stand in for the microphone whenever Record is tapped, without opening the recorder at
   launch (the journey tests use it)
+- Notebooks: `-show notebook` is a three-page sample in a student's hand (narrow ruled, grid, Cornell notes), made
+  afresh each launch; with it `-notebook-page <n>`, `-notebook-colour cream|dark`, `-notebook-zoom 0.42` (a share of
+  fitting the width), `-notebook-sidebar` (an iPad's pages), `-notebook-sheet paper|pages`. `-show handwriting` is New
+  notebook. `-open lecture:<id> -ink 1 -sample-notebook` writes beside a lecture with the sample. `-fresh-notebooks`
+  starts with none on the phone (the notebook test uses it).
 - Your own: read `DebugLaunch.flag("-x")` / `DebugLaunch.value("-x")` in your own file.
 
 The demo library: three classes (Calculus II yellow, Intro to Psychology green, Organic Chemistry orange); five notes:
@@ -364,8 +369,10 @@ phone is "being written" for 30 seconds, then has notes round its typed lines.
 `StudyStashUITests/JourneyTests.swift` walks FLOWS.md's first run and core journeys with real taps on the demo library
 (Up next records into its class and Stop opens the lecture; a note, Study, Ask about this lecture and a source at its
 moment; Due to an assignment, its lectures and its class; Ask to a source on the Transcript; Search; Settings and Back;
-a class's Attach), follows every `studystash://` link, and on an iPad opens a class from the sidebar. Pages carry
-`page.<name>` accessibility identifiers (`home`, `class`, `lecture`, `assignment`, `due`, `settings`, `study`).
+a class's Attach), follows every `studystash://` link, and on an iPad opens a class from the sidebar.
+`NotebookTests.swift` makes a notebook from Attach's Write notes, changes its paper, adds a page, writes, undoes and
+redoes, and checks Done files it in its class. Pages carry `page.<name>` accessibility identifiers (`home`, `class`,
+`lecture`, `assignment`, `due`, `settings`, `study`, `newNotebook`, `notebook`, `paper`, `notebookPages`).
 
 ```sh
 xcodebuild -project StudyStash.xcodeproj -scheme StudyStash -jobs 2 -destination "platform=iOS Simulator,id=<udid>" \

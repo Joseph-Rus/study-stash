@@ -101,7 +101,8 @@ struct PaperPicker: View {
                 RoundedRectangle(cornerRadius: 4)
                     .fill(Color(uiColor: PaperDrawing.inks(colour).ground))
                     .frame(width: 22, height: 22)
-                    .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Color.line, lineWidth: 1))
+                    // Firmer than a hairline, so dark paper shows on a dark sheet.
+                    .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Color.inkSubtle.opacity(0.45), lineWidth: 1))
                 Text(colour.name)
                     .textStyle(.buttonSmall)
                     .foregroundStyle(chosen ? Color.ink : .inkMuted)

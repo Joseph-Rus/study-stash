@@ -219,6 +219,11 @@ final class NotebookCanvas: NSObject {
         if let page = pendingScroll, canvas.bounds.width > 0 { go(to: page, animated: false) }
     }
 
+    /// The desk follows the app's light or dark; the canvas is always paper (light), so its words are told which.
+    func setAppearance(_ style: UIUserInterfaceStyle) {
+        hint.overrideUserInterfaceStyle = style
+    }
+
     func setChrome(_ insets: UIEdgeInsets) {
         guard insets != chrome else { return }
         chrome = insets
@@ -293,15 +298,13 @@ final class NotebookCanvas: NSObject {
 
     /// "Pull up to add a page" under the last page, once it has writing on it.
     private func updateHint() {
-        guard let last = notebook?.pages.last, !frames.isEmpty else { hint.isHidden = true; return }
-        _ = last
-        hint.isHidden = !lastInked
-        guard lastInked else { return }
+        hint.isHidden = frames.isEmpty || !lastInked
+        guard !hint.isHidden else { return }
         let s = canvas.zoomScale
         hint.text = pulling ? "Let go to add a page" : "Pull up to add a page"
         hint.sizeToFit()
-        let width = max(contentWidth * s, canvas.bounds.width - canvas.contentInset.left * 2)
-        hint.center = CGPoint(x: width / 2, y: contentHeight * s + 30)
+        // Under the middle of the pages, which the insets keep in the middle of the screen.
+        hint.center = CGPoint(x: contentWidth * s / 2, y: contentHeight * s + 30)
     }
 
     private func checkLastPage() {
@@ -340,6 +343,12 @@ final class NotebookCanvas: NSObject {
             latest.updated = .now
             store.save(latest)
         }
+    }
+
+    /// Nothing on page `i`: no writing and no PDF (deleting it loses nothing, so it isn't asked about).
+    func pageIsBlank(_ i: Int) -> Bool {
+        guard let n = notebook, n.pages.indices.contains(i), frames.indices.contains(i) else { return true }
+        return n.pages[i].pdf == nil && !canvas.drawing.strokes.contains { page(at: $0.renderBounds.midY) == i }
     }
 
     /// The page a point down the canvas belongs to: the gaps are split between the pages either side.
@@ -550,6 +559,10 @@ struct NotebookCanvasView: UIViewRepresentable {
             self.model = model
             super.init(frame: .zero)
             addSubview(model.canvas)
+            model.setAppearance(traitCollection.userInterfaceStyle)
+            registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (host: Host, _: UITraitCollection) in
+                host.model.setAppearance(host.traitCollection.userInterfaceStyle)
+            }
         }
         required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 

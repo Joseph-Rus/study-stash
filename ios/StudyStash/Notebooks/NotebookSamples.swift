@@ -12,13 +12,14 @@ import UIKit
 enum NotebookSamples {
     static let id = UUID(uuidString: "0B5E55ED-0000-4000-8000-00000000A11C")!
 
-    static func make() -> UUID {
+    static func make(lecture: (id: String, title: String)? = nil, className: String? = "Calculus II") -> UUID {
         let store = NotebookStore.shared
         if let old = store.notebook(id) { store.delete(old) }
         let colour = DebugLaunch.value("-notebook-colour").flatMap(Notebook.PaperColour.init(rawValue:)) ?? .white
         let papers: [Notebook.Paper] = [.narrow, .grid, .cornell]
         let pages = papers.map { Notebook.Page(Notebook.Template(paper: $0, colour: colour)) }
-        let n = Notebook(id: id, title: "Calculus II notes, 14 Oct", className: "Calculus II", lectureID: nil, lectureTitle: nil,
+        let n = Notebook(id: id, title: lecture.map { "Notes, \($0.title)" } ?? "Calculus II notes, 14 Oct", className: className,
+                         lectureID: lecture?.id, lectureTitle: lecture?.title,
                          pages: pages, template: Notebook.Template(paper: .narrow, colour: colour))
         store.save(n)
         let dark = colour == .dark

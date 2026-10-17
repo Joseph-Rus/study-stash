@@ -94,6 +94,7 @@ struct NotebookPages: View {
     var went: (() -> Void)?
     var addPDF: (() -> Void)?
     @State private var store = NotebookStore.shared
+    @State private var deleting: Int?
 
     private var notebook: Notebook? { canvas.id.flatMap(store.notebook) }
 
@@ -115,6 +116,7 @@ struct NotebookPages: View {
             }
         }
         .accessibilityIdentifier("page.notebookPages")
+        .confirmDeletingPage($deleting, canvas: canvas)
     }
 
     private func cell(_ page: Notebook.Page, _ i: Int, count: Int) -> some View {
@@ -150,7 +152,9 @@ struct NotebookPages: View {
             if i + 1 < count { Button("Move later", icon: "arrow_downward") { canvas.movePage(i, to: i + 1) } }
             if count > 1 {
                 Divider()
-                Button("Delete page", icon: "delete", role: .destructive) { canvas.deletePage(i) }
+                Button("Delete page", icon: "delete", role: .destructive) {
+                    if canvas.pageIsBlank(i) { canvas.deletePage(i) } else { deleting = i }
+                }
             }
         }
         .draggable(page.id.uuidString) {
@@ -189,6 +193,19 @@ struct NotebookPages: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("notebook.pages.add")
+    }
+}
+
+extension View {
+    /// "Delete page 3?": asked before a page with writing on it goes (deleting a page can't be undone).
+    func confirmDeletingPage(_ page: Binding<Int?>, canvas: NotebookCanvas) -> some View {
+        confirmationDialog(page.wrappedValue.map { "Delete page \($0 + 1)?" } ?? "Delete this page?",
+                           isPresented: Binding(get: { page.wrappedValue != nil }, set: { if !$0 { page.wrappedValue = nil } }),
+                           titleVisibility: .visible, presenting: page.wrappedValue) { i in
+            Button("Delete page", role: .destructive) { canvas.deletePage(i) }
+        } message: { _ in
+            Text("What's written on it goes too. This can't be undone.")
+        }
     }
 }
 

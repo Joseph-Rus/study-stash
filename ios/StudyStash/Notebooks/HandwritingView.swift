@@ -30,6 +30,10 @@ struct HandwritingView: View {
         }
         .task(id: id) {
             if id != nil { return }
+            #if DEBUG
+            // Pictures: `-sample-notebook` writes the sample notebook for this lecture.
+            if DebugLaunch.flag("-sample-notebook"), let lecture { id = NotebookSamples.make(lecture: lecture, className: className); return }
+            #endif
             if let lecture, let existing = store.notebooks.first(where: { $0.lectureID == lecture.id }) {
                 id = existing.id
                 return
@@ -59,7 +63,9 @@ struct NotebookEditor: View {
     @State private var closing = false
     @State private var message: String?
     @State private var renaming = false
+    @State private var draftTitle = ""
     @State private var confirmingDelete = false
+    @State private var deletingPage: Int?
     @State private var paperPopover = false
     @State private var paperSheet = false
     @State private var pagesSheet = false
@@ -95,17 +101,15 @@ struct NotebookEditor: View {
                     .navigationTitle(notebook?.title ?? "Notes")
                     .navigationSubtitle(regular ? subtitle : "")
                     .navigationBarTitleDisplayMode(.inline)
-                    .toolbarTitleMenu {
+                    .modifier(TitleMenu(on: regular) {
                         // An iPad's title: tap to rename. (A phone's bar has undo and redo there instead.)
-                        if regular {
-                            Button("Rename", icon: "edit") { renaming = true }
-                            if let n = notebook {
-                                ShareLink(item: PDFExport(id: n.id, name: n.title), preview: SharePreview(n.title)) {
-                                    Label("Share as PDF", icon: "ios_share")
-                                }
+                        Button("Rename", icon: "edit") { startRenaming() }
+                        if let n = notebook {
+                            ShareLink(item: PDFExport(id: n.id, name: n.title), preview: SharePreview(n.title)) {
+                                Label("Share as PDF", icon: "ios_share")
                             }
                         }
-                    }
+                    })
                     .toolbar { toolbar }
                 }
             }
@@ -139,9 +143,11 @@ struct NotebookEditor: View {
                 if !canvas.addPDF(url, after: canvas.current) { message = "That PDF couldn't be opened." }
             }
         }
+        .confirmDeletingPage($deletingPage, canvas: canvas)
         .alert("Rename notebook", isPresented: $renaming) {
-            TextField("Title", text: titleBinding)
-            Button("Done") {}
+            TextField("Title", text: $draftTitle)
+            Button("Cancel", role: .cancel) {}
+            Button("Rename") { titleBinding.wrappedValue = draftTitle }
         }
         .confirmationDialog("Delete this notebook from this phone?", isPresented: $confirmingDelete, titleVisibility: .visible) {
             Button("Delete notebook", role: .destructive) { deleteNotebook() }
@@ -151,7 +157,9 @@ struct NotebookEditor: View {
     }
 
     /// Something over the page: Apple's pens step aside for it.
-    private var overlaid: Bool { paperPopover || paperSheet || pagesSheet || importing || renaming || confirmingDelete }
+    private var overlaid: Bool {
+        paperPopover || paperSheet || pagesSheet || importing || renaming || confirmingDelete || deletingPage != nil
+    }
 
     /// The pages on the desk, to the screen's edges, under the bars.
     private var desk: some View {
@@ -236,15 +244,22 @@ struct NotebookEditor: View {
             // A phone: undo and redo where the title would be (at the end, the system folds them into its overflow, and
             // the middle takes one item).
             ToolbarItem(placement: .principal) {
-                HStack(spacing: 6) { undoRedo }
-                    .buttonStyle(.icon)
+                HStack(spacing: 6) {
+                    Button { canvas.undo() } label: { Label("Undo", icon: "undo") }
+                        .disabled(!canvas.canUndo).opacity(canvas.canUndo ? 1 : 0.35)
+                        .accessibilityIdentifier("notebook.undo")
+                    Button { canvas.redo() } label: { Label("Redo", icon: "redo") }
+                        .disabled(!canvas.canRedo).opacity(canvas.canRedo ? 1 : 0.35)
+                        .accessibilityIdentifier("notebook.redo")
+                }
+                .buttonStyle(.icon)
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Button("Paper", icon: "description") { canvas.flush(); paperSheet = true }
                     addPageItems
                     Divider()
-                    Button("Rename", icon: "edit") { renaming = true }
+                    Button("Rename", icon: "edit") { startRenaming() }
                     moreItems
                 } label: { Label("More", icon: "more_horiz") }
                 .accessibilityIdentifier("notebook.more")
@@ -264,7 +279,7 @@ struct NotebookEditor: View {
     /// Beside a lecture: the title, where it's got to, and the same buttons, in one row.
     private var embeddedBar: some View {
         HStack(spacing: 4) {
-            Button { renaming = true } label: {
+            Button { startRenaming() } label: {
                 VStack(alignment: .leading, spacing: 0) {
                     Text(notebook?.title ?? "Notes").textStyle(.title).foregroundStyle(.ink).lineLimit(1)
                     Text("Page \(canvas.current + 1) of \(canvas.pageCount)").textStyle(.micro).foregroundStyle(.inkMuted)
@@ -290,7 +305,7 @@ struct NotebookEditor: View {
             Menu {
                 addPageItems
                 Divider()
-                Button("Rename", icon: "edit") { renaming = true }
+                Button("Rename", icon: "edit") { startRenaming() }
                 moreItems
             } label: { Label("More", icon: "more_horiz") }
             .buttonStyle(.icon)
@@ -342,7 +357,9 @@ struct NotebookEditor: View {
             }
         }
         Divider()
-        Button("Delete this page", icon: "page_remove", role: .destructive) { canvas.deletePage(canvas.current) }
+        Button("Delete this page", icon: "page_remove", role: .destructive) {
+            if canvas.pageIsBlank(canvas.current) { canvas.deletePage(canvas.current) } else { deletingPage = canvas.current }
+        }
             .disabled(canvas.pageCount < 2)
         Button("Delete notebook", icon: "delete", role: .destructive) { confirmingDelete = true }
     }
@@ -356,6 +373,11 @@ struct NotebookEditor: View {
             paperPopover = false
             paperSheet = false
         }
+    }
+
+    private func startRenaming() {
+        draftTitle = notebook?.title ?? ""
+        renaming = true
     }
 
     // MARK: pages
@@ -420,6 +442,16 @@ struct NotebookEditor: View {
             let store = store
             Task { _ = await store.send(n.id, api: api, waitingAtMost: .seconds(120)) }
         }
+    }
+}
+
+/// The title's menu, only where the title shows (an iPad): a phone's bar shows no chevron for an empty one.
+private struct TitleMenu<Items: View>: ViewModifier {
+    var on: Bool
+    @ViewBuilder var items: Items
+
+    func body(content: Content) -> some View {
+        if on { content.toolbarTitleMenu { items } } else { content }
     }
 }
 
