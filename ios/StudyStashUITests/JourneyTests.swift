@@ -136,6 +136,20 @@ final class JourneyTests: XCTestCase {
         expect(button(app, prefix: "Import a recording"), "the Attach chooser's recording row")
     }
 
+    // MARK: an iPad's sidebar
+
+    func testIPadSidebarOpensAClass() throws {
+        try XCTSkipUnless(UIDevice.current.userInterfaceIdiom == .pad, "The class sidebar is an iPad's")
+        let app = launch()
+        expect(page(app, "home"), "Home")
+        let row = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label == %@ AND (elementType == %d OR elementType == %d)", "Organic Chemistry",
+                                  XCUIElement.ElementType.cell.rawValue, XCUIElement.ElementType.button.rawValue)).firstMatch
+        tap(row, "Organic Chemistry in the sidebar")
+        expect(page(app, "class"), "the class's page from the sidebar")
+        expect(app.buttons["Record Organic Chemistry"], "the Record bar recording into the class")
+    }
+
     // MARK: links (widgets, the Live Activity, notifications)
 
     func testLinksOpenTheirPages() {
