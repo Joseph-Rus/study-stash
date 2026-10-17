@@ -66,6 +66,8 @@ final class AppModel {
         case audio(PendingFile?)
         case goodnotes(URL)
         case handwriting(className: String?, lecture: (id: String, title: String)?)
+        /// A notebook on this phone, open to write in (one just brought in from GoodNotes).
+        case notebook(UUID)
         /// The Attach sheet, the one chooser (scan, photos, files, write, import a recording, GoodNotes), for a class
         /// and maybe a lecture; nil class from Home (it asks which).
         case attach(className: String?, lecture: (id: String, title: String)?)
@@ -77,6 +79,15 @@ final class AppModel {
             case .audio(let f): "audio-\(f?.id.uuidString ?? "")"
             case .goodnotes(let u): "goodnotes-\(u.path)"
             case .handwriting(let c, let l): "handwriting-\(c ?? "")-\(l?.id ?? "")"
+            case .notebook(let id): "notebook-\(id)"
+            }
+        }
+
+        /// Shown over the whole screen (a notebook), not in a sheet.
+        var isNotebook: Bool {
+            switch self {
+            case .handwriting, .notebook: true
+            default: false
             }
         }
     }

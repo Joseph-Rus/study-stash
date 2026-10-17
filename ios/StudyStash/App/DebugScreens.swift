@@ -99,27 +99,9 @@ enum DebugSamples {
         return url
     }
 
-    /// A notebook with a page of handwriting, kept on this phone (the Home tab's shelf shows it from then on).
-    static func notebook() -> UUID {
-        let store = NotebookStore.shared
-        if let n = store.notebooks.first { return n.id }
-        let n = Notebook.blank(title: "Calculus II notes, 14 Oct", className: "Calculus II", lecture: nil)
-        store.save(n)
-        var strokes: [PKStroke] = []
-        let ink = PKInk(.pen, color: UIColor(red: 0.1, green: 0.15, blue: 0.4, alpha: 1))
-        for row in 0..<6 {
-            let y = 140.0 + Double(row) * 46
-            let end = 520.0 - Double(row % 3) * 110
-            var points: [PKStrokePoint] = []
-            for (i, x) in stride(from: 60.0, to: end, by: 6).enumerated() {
-                points.append(PKStrokePoint(location: CGPoint(x: x, y: y - 12 * abs(sin(x / 11))), timeOffset: Double(i) * 0.01,
-                                            size: CGSize(width: 2.6, height: 2.6), opacity: 1, force: 1, azimuth: 0, altitude: .pi / 2))
-            }
-            strokes.append(PKStroke(ink: ink, path: PKStrokePath(controlPoints: points, creationDate: .now)))
-        }
-        if let page = n.pages.first { store.setDrawing(PKDrawing(strokes: strokes), n, page) }
-        return n.id
-    }
+    /// A notebook of three pages of handwriting (narrow ruled, grid, Cornell notes), kept on this phone (the Home
+    /// tab's shelf shows it from then on): `NotebookSamples`.
+    static func notebook() -> UUID { NotebookSamples.make() }
 
     /// Stored (uncompressed) zip entries.
     private static func zip(_ entries: [(String, Data)]) -> Data {

@@ -94,6 +94,9 @@ struct MainTabs: View {
 
     var body: some View {
         @Bindable var app = app
+        // What's presented: a notebook over the whole screen, anything else in a sheet (read here, so a change shows).
+        let sheet = app.incoming?.isNotebook == false ? app.incoming : nil
+        let notebook = app.incoming?.isNotebook == true ? app.incoming : nil
         TabView(selection: $app.tab) { tabs }
         .tabViewStyle(.sidebarAdaptable)
         // An iPad opens on the sidebar, as the desktop always has it (the tabs along the top stay a tap away).
@@ -113,13 +116,21 @@ struct MainTabs: View {
         .sheet(isPresented: $app.showingRecorder) {
             RecordView(startClass: app.recordFor)
         }
-        .sheet(item: $app.incoming) { incoming in
+        .sheet(item: Binding(get: { sheet }, set: { app.incoming = $0 })) { incoming in
             switch incoming {
             case let .attach(cls, lecture): AddFilesView(className: cls, lecture: lecture)
             case let .files(files, cls, lecture): AddFilesView(className: cls, lecture: lecture, files: files)
             case .audio(let file): ImportAudioView(file: file)
             case .goodnotes(let url): GoodNotesImportView(url: url)
-            case let .handwriting(cls, lecture): HandwritingView(className: cls, lecture: lecture).interactiveDismissDisabled()
+            case .handwriting, .notebook: EmptyView()
+            }
+        }
+        // A notebook is the whole screen, as paper is: never a card over Home.
+        .fullScreenCover(item: Binding(get: { notebook }, set: { app.incoming = $0 })) { incoming in
+            switch incoming {
+            case let .handwriting(cls, lecture): HandwritingView(className: cls, lecture: lecture)
+            case .notebook(let id): NotebookEditor(id: id)
+            default: EmptyView()
             }
         }
         #if DEBUG
