@@ -23,26 +23,25 @@ extension AppModel {
     }
 }
 
-/// A class's swatch as an image, for where only an image goes (a sidebar tab's icon): light and dark.
+/// A class's swatch as an image, for where only an image goes (a sidebar tab's icon), in light or dark: an image made
+/// with its scale said, so the sidebar shows it at the swatch's size (a UIImage's scale was lost on the way, and the
+/// swatch drawn three times too big).
 enum SwatchImage {
-    @MainActor static func of(_ hue: Highlighter?) -> UIImage {
-        let asset = UIImageAsset()
-        for style in [UIUserInterfaceStyle.light, .dark] {
-            let traits = UITraitCollection(userInterfaceStyle: style)
-            let fill = (hue?.swatchUI ?? UIColor(hex: "#808080")).resolvedColor(with: traits)
-            let format = UIGraphicsImageRendererFormat()
-            format.scale = 3
-            let image = UIGraphicsImageRenderer(size: CGSize(width: 18, height: 14), format: format).image { r in
-                let c = r.cgContext
-                c.translateBy(x: 9, y: 7)
-                c.rotate(by: -8 * .pi / 180)
-                c.translateBy(x: -9, y: -7)
-                fill.setFill()
-                UIBezierPath(roundedRect: CGRect(x: 2, y: 2, width: 14, height: 10), cornerRadius: 3.5).fill()
-            }.withRenderingMode(.alwaysOriginal)
-            asset.register(image, with: traits)
+    @MainActor static func of(_ hue: Highlighter?, dark: Bool) -> Image {
+        let traits = UITraitCollection(userInterfaceStyle: dark ? .dark : .light)
+        let fill = (hue?.swatchUI ?? UIColor(hex: "#808080")).resolvedColor(with: traits)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 3
+        let picture = UIGraphicsImageRenderer(size: CGSize(width: 18, height: 14), format: format).image { r in
+            let c = r.cgContext
+            c.translateBy(x: 9, y: 7)
+            c.rotate(by: -8 * .pi / 180)
+            c.translateBy(x: -9, y: -7)
+            fill.setFill()
+            UIBezierPath(roundedRect: CGRect(x: 2, y: 2, width: 14, height: 10), cornerRadius: 3.5).fill()
         }
-        return asset.image(with: .current)
+        guard let cg = picture.cgImage else { return Image(uiImage: picture) }
+        return Image(decorative: cg, scale: 3).renderingMode(.original)
     }
 }
 

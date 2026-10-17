@@ -81,6 +81,8 @@ struct MainTabs: View {
     /// The tabs, by the name pages used before.
     typealias TabID = StudyStash.TabID
     @Environment(AppModel.self) private var app
+    /// Light or dark, for the swatches in an iPad's sidebar (pictures, so they don't follow it themselves).
+    @Environment(\.colorScheme) private var scheme
     #if DEBUG
     @State private var debugSheet: DebugScreen?
     @State private var debugCover: DebugScreen?
@@ -89,31 +91,10 @@ struct MainTabs: View {
 
     var body: some View {
         @Bindable var app = app
-        TabView(selection: $app.tab) {
-            // The desktop's names and icons: Home and Due as its sidebar has them. Settings is on Home's toolbar.
-            Tab("Home", image: "home", value: TabID.home) { LibraryTab() }
-            if app.forSchool { Tab("Due", image: "event_upcoming", value: TabID.due) { DueTab() } }
-            Tab("Ask", image: "chat", value: TabID.ask) { AskTab() }
-            Tab("Search", image: "search", value: TabID.search, role: .search) { SearchTab() }
-            // TO DO: the iPad sidebar below crashes Swift 6.2.3 type-checking this TabView as written; it is left out until
-            // it is rebuilt (e.g. its tabs made in a function of their own).
-/*SIDEBAR
-            // An iPad's sidebar: each class under its group, as the desktop's sidebar (not in a phone's tab bar).
-            ForEach(app.folderGroups) { group in
-                TabSection(group.name) {
-                    ForEach(group.classes) { c in
-                        Tab(value: TabID.folder(c.name)) {
-                            NavigationStack(path: app.stack(.folder(c.name))) { ClassView(name: c.name).routes() }
-                        } label: {
-                            Label { Text(c.name) } icon: { Image(uiImage: SwatchImage.of(app.hue(of: c.name))) }
-                        }
-                    }
-                }
-                .tabPlacement(.sidebarOnly)
-            }
-SIDEBAR*/
-        }
+        TabView(selection: $app.tab) { tabs }
         .tabViewStyle(.sidebarAdaptable)
+        // An iPad opens on the sidebar, as the desktop always has it (the tabs along the top stay a tap away).
+        .defaultAdaptableTabBarPlacement(.sidebar)
         .tabViewSidebarBottomBar { SidebarFooter() }
         .tabBarMinimizeBehavior(.onScrollDown)
         .modifier(RecordBar(enabled: app.tab != .ask && !app.recordBarHidden))
@@ -186,6 +167,46 @@ SIDEBAR*/
             }
             #endif
         }
+    }
+
+    /// The tabs. Made here, apart from the TabView, so Swift type-checks them in parts (the iPad's class sections inline
+    /// in the body were too much for Swift 6.2's type checker).
+    @TabContentBuilder<TabID> private var tabs: some TabContent<TabID> {
+        // The desktop's names and icons: Home and Due as its sidebar has them. Settings is on Home's toolbar.
+        Tab("Home", image: "home", value: TabID.home) { LibraryTab() }
+        if app.forSchool { Tab("Due", image: "event_upcoming", value: TabID.due) { DueTab() } }
+        Tab("Ask", image: "chat", value: TabID.ask) { AskTab() }
+        Tab("Search", image: "search", value: TabID.search, role: .search) { SearchTab() }
+        folderSections
+    }
+
+    /// An iPad's sidebar: each class under its group, as the desktop's sidebar (never in a phone's tab bar).
+    @TabContentBuilder<TabID> private var folderSections: some TabContent<TabID> {
+        ForEach(app.folderGroups) { group in
+            TabSection(group.name) {
+                ForEach(group.classes) { c in folderTab(c) }
+            }
+            .tabPlacement(.sidebarOnly)
+        }
+    }
+
+    /// A class in the sidebar: its swatch and name; its page, on a stack of its own.
+    private func folderTab(_ c: ClassInfo) -> some TabContent<TabID> {
+        Tab(value: TabID.folder(c.name)) {
+            FolderTab(name: c.name)
+        } label: {
+            Label { Text(c.name) } icon: { SwatchImage.of(app.hue(of: c.name), dark: scheme == .dark) }
+        }
+    }
+}
+
+/// A class's page as an iPad sidebar tab, with its own stack.
+private struct FolderTab: View {
+    @Environment(AppModel.self) private var app
+    let name: String
+
+    var body: some View {
+        NavigationStack(path: app.stack(.folder(name))) { ClassView(name: name).routes() }
     }
 }
 
