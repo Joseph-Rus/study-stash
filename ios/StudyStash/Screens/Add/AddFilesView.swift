@@ -23,8 +23,9 @@ struct PendingFile: Identifiable, Hashable {
 
 /// Attach: the one place anything is added to a class or a lecture, opened from Home's +, a class's Attach and a
 /// lecture's Attach (and with files another app handed over). Scan pages, photos and files are gathered here and
-/// added together; Write notes, Import a recording and From GoodNotes go on to their own screens in this sheet. The
-/// library reads what's added (handwriting too), and its notes and Ask use it.
+/// added together; Import a recording and From GoodNotes go on to their own screens in this sheet, and Write notes
+/// opens a notebook over the whole screen (the sheet gives way). The library reads what's added (handwriting too),
+/// and its notes and Ask use it.
 ///
 /// With no class and no lecture (Home's +, or files from another app) it asks where first: an "Attach to" row, set to
 /// the class on the calendar now, else Unsorted.
@@ -49,7 +50,7 @@ struct AddFilesView: View {
     @State private var path: [Step] = []
 
     /// Where a row goes on to, in this same sheet.
-    private enum Next { case notebook, recording, goodnotes(URL) }
+    private enum Next { case recording, goodnotes(URL) }
     /// A step pushed inside the sheet.
     private enum Step: Hashable { case place, goodnotes }
 
@@ -67,9 +68,6 @@ struct AddFilesView: View {
 
     var body: some View {
         switch next {
-        case .notebook:
-            HandwritingView(className: className, lecture: lecture)
-                .interactiveDismissDisabled()
         case .recording:
             // The recording lane's Import a recording, for this class; after Import it opens the lecture.
             ImportAudioView(file: nil, className: className)
@@ -190,7 +188,8 @@ struct AddFilesView: View {
                     AttachRow(icon: "folder", title: "Files", detail: "PDFs, slides, documents")
                 }
                 RowRule()
-                Button { next = .notebook } label: {
+                // A notebook is the whole screen: this sheet gives way to it.
+                Button { app.incoming = .handwriting(className: className, lecture: lecture) } label: {
                     AttachRow(icon: "edit_note", title: "Write notes", detail: "A notebook for your Apple Pencil or finger")
                 }
                 RowRule()

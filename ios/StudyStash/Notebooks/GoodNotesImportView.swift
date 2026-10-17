@@ -37,7 +37,8 @@ struct GoodNotesImportView: View {
 
     var body: some View {
         if let opened {
-            NotebookEditor(id: opened)
+            // Brought in: it opens over the whole screen, as every notebook does, and this sheet gives way.
+            Color.surface.task { app.incoming = .notebook(opened) }
         } else {
             NavigationStack {
                 ScrollView {
