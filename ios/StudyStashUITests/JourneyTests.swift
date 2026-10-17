@@ -136,7 +136,56 @@ final class JourneyTests: XCTestCase {
         expect(button(app, prefix: "Import a recording"), "the Attach chooser's recording row")
     }
 
+    // MARK: links (widgets, the Live Activity, notifications)
+
+    func testLinksOpenTheirPages() {
+        let app = launch(["-tab", "search"])
+        expect(app.searchFields.firstMatch, "Search")
+
+        follow("studystash://class/Calculus%20II")
+        expect(page(app, "class"), "a class's link")
+        follow("studystash://lecture/demo-calc-ibp?at=220")
+        expect(page(app, "lecture"), "a lecture's link")
+        expectMoment(app)
+        follow("studystash://assignment/Calculus%20II/1")
+        expect(page(app, "assignment"), "an assignment's link")
+        expect(app.staticTexts["Problem Set 6: Integration by Parts"], "the assignment the link names")
+        XCTAssertTrue(app.tabBars.buttons["Due"].isSelected, "an assignment opens on Due")
+        follow("studystash://due")
+        expect(page(app, "due"), "Due's link")
+        follow("studystash://ask")
+        expect(app.descendants(matching: .any).matching(identifier: "ask.field").firstMatch, "Ask's link")
+        follow("studystash://recording")
+        expect(page(app, "home"), "the recording's link with nothing recording: Home")
+        follow("studystash://search")
+        expect(page(app, "home"), "a link the app doesn't know: Home")
+
+        follow("studystash://record")
+        allowMicrophone()
+        expect(app.buttons["Stop recording"], "Record's link, recording", timeout: 15)
+        expect(app.buttons["In Calculus II. Change class"], "Record's link recording the class on now")
+        app.buttons["Hide. It keeps recording"].tap()
+        expect(page(app, "home"), "Home under the recorder")
+        follow("studystash://recording")
+        expect(app.buttons["Stop recording"], "the recording's link while recording: the recorder")
+        app.buttons["Stop recording"].tap()
+        expect(page(app, "lecture"), "the lecture after Stop", timeout: 20)
+
+        follow("studystash://record?class=Organic%20Chemistry")
+        expect(app.buttons["In Organic Chemistry. Change class"], "Record's link recording into the class it names", timeout: 15)
+        follow("studystash://home")
+        expect(page(app, "home"), "Home's link")
+        XCTAssertFalse(app.buttons["Stop recording"].exists, "Home's link put the recorder away")
+    }
+
     // MARK: helpers
+
+    /// Opens a link as a widget does, saying yes when the system asks whether to open it in the app.
+    private func follow(_ link: String) {
+        XCUIDevice.shared.system.open(URL(string: link)!)
+        let open = XCUIApplication(bundleIdentifier: "com.apple.springboard").buttons["Open"]
+        if open.waitForExistence(timeout: 3) { open.tap() }
+    }
 
     private func launch(_ extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
