@@ -184,6 +184,10 @@ final class NotebookStore {
 
     init(folder: URL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appending(path: "Notebooks")) {
         self.folder = folder
+        #if DEBUG
+        // Tests: `-fresh-notebooks` starts with none on this phone.
+        if DebugLaunch.flag("-fresh-notebooks") { try? FileManager.default.removeItem(at: folder) }
+        #endif
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let dirs = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []
         notebooks = dirs.compactMap { try? JSONDecoder.iso.decode(Notebook.self, from: Data(contentsOf: $0.appending(path: "notebook.json"))) }

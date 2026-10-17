@@ -28,6 +28,9 @@ final class NotebookCanvas: NSObject {
 
     @ObservationIgnored let canvas = PKCanvasView()
     @ObservationIgnored let picker = PKToolPicker()
+    /// What Apple's pens are shown for. Not the canvas: a phone showed the keyboard (made first responder, the canvas
+    /// asks for one whenever a menu opens over it).
+    @ObservationIgnored let tools = ToolsResponder()
     @ObservationIgnored private let underlay = UIView()
     @ObservationIgnored private let hint = UILabel()
     @ObservationIgnored private var tiles: [CALayer] = []
@@ -75,6 +78,8 @@ final class NotebookCanvas: NSObject {
         underlay.isUserInteractionEnabled = false
         underlay.layer.anchorPoint = .zero
         canvas.insertSubview(underlay, at: 0)
+        tools.isUserInteractionEnabled = false
+        canvas.addSubview(tools)
 
         hint.font = UIFont(name: Atkinson.face(.medium), size: 13) ?? .systemFont(ofSize: 13, weight: .medium)
         hint.textColor = Palette.inkSubtle
@@ -367,8 +372,8 @@ final class NotebookCanvas: NSObject {
 
     /// Apple's pens, shown while the page is written on (hidden under a sheet or popover).
     func showTools(_ on: Bool) {
-        picker.setVisible(on, forFirstResponder: canvas)
-        if on { canvas.becomeFirstResponder() }
+        picker.setVisible(on, forFirstResponder: tools)
+        if on { tools.becomeFirstResponder() }
     }
 
     /// A dark pen on dark paper (or a white one on light) can't be seen: it's turned to white (or black) on that page.
@@ -447,6 +452,15 @@ extension NotebookCanvas: PKToolPickerObserver {
 
 extension NotebookCanvas: UIGestureRecognizerDelegate {
     func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
+}
+
+/// Holds first responder while a notebook is open, so Apple's pens show, and never asks for a keyboard.
+final class ToolsResponder: UIView {
+    override var canBecomeFirstResponder: Bool { true }
+    /// With Apple's pens docked on a phone, a menu opening brought up the keyboard in their place: an empty input view
+    /// stands there instead.
+    private let nothing = UIView(frame: .zero)
+    override var inputView: UIView? { nothing }
 }
 
 /// Watches for an Apple Pencil touching the canvas, and lets every touch through.

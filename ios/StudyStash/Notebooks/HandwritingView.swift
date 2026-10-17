@@ -92,14 +92,17 @@ struct NotebookEditor: View {
                         desk
                     }
                     .animation(.smooth(duration: 0.25), value: sidebar)
-                    .navigationTitle(titleBinding)
-                    .navigationSubtitle(subtitle)
+                    .navigationTitle(notebook?.title ?? "Notes")
+                    .navigationSubtitle(regular ? subtitle : "")
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbarTitleMenu {
-                        RenameButton()
-                        if let n = notebook {
-                            ShareLink(item: PDFExport(id: n.id, name: n.title), preview: SharePreview(n.title)) {
-                                Label("Share as PDF", icon: "ios_share")
+                        // An iPad's title: tap to rename. (A phone's bar has undo and redo there instead.)
+                        if regular {
+                            Button("Rename", icon: "edit") { renaming = true }
+                            if let n = notebook {
+                                ShareLink(item: PDFExport(id: n.id, name: n.title), preview: SharePreview(n.title)) {
+                                    Label("Share as PDF", icon: "ios_share")
+                                }
                             }
                         }
                     }
@@ -206,18 +209,19 @@ struct NotebookEditor: View {
             Button {
                 if regular { sidebar.toggle() } else { canvas.flush(); pagesSheet = true }
             } label: {
-                Label("Pages", icon: regular ? "sidebar" : "grid_view")
+                if regular {
+                    Label("Pages", icon: "sidebar")
+                } else {
+                    // A phone's bar has no room for the title: the page it's on is here, and opens the pages.
+                    Text("\(canvas.current + 1) of \(canvas.pageCount)").textStyle(.buttonSmall).monospacedDigit()
+                }
             }
+            .accessibilityLabel("Pages, page \(canvas.current + 1) of \(canvas.pageCount)")
             .accessibilityIdentifier("notebook.pages")
         }
-        ToolbarItemGroup(placement: .topBarTrailing) {
-            Button { canvas.undo() } label: { Label("Undo", icon: "undo") }
-                .disabled(!canvas.canUndo)
-            Button { canvas.redo() } label: { Label("Redo", icon: "redo") }
-                .disabled(!canvas.canRedo)
-        }
-        ToolbarSpacer(.fixed, placement: .topBarTrailing)
         if regular {
+            ToolbarItemGroup(placement: .topBarTrailing) { undoRedo }
+            ToolbarSpacer(.fixed, placement: .topBarTrailing)
             ToolbarItemGroup(placement: .topBarTrailing) {
                 Button { canvas.flush(); paperPopover = true } label: { Label("Paper", icon: "description") }
                     .accessibilityIdentifier("notebook.paper")
@@ -229,16 +233,32 @@ struct NotebookEditor: View {
                     .accessibilityIdentifier("notebook.more")
             }
         } else {
+            // A phone: undo and redo where the title would be (at the end, the system folds them into its overflow, and
+            // the middle takes one item).
+            ToolbarItem(placement: .principal) {
+                HStack(spacing: 6) { undoRedo }
+                    .buttonStyle(.icon)
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Button("Paper", icon: "description") { canvas.flush(); paperSheet = true }
                     addPageItems
                     Divider()
+                    Button("Rename", icon: "edit") { renaming = true }
                     moreItems
                 } label: { Label("More", icon: "more_horiz") }
                 .accessibilityIdentifier("notebook.more")
             }
         }
+    }
+
+    @ViewBuilder private var undoRedo: some View {
+        Button { canvas.undo() } label: { Label("Undo", icon: "undo") }
+            .disabled(!canvas.canUndo)
+            .accessibilityIdentifier("notebook.undo")
+        Button { canvas.redo() } label: { Label("Redo", icon: "redo") }
+            .disabled(!canvas.canRedo)
+            .accessibilityIdentifier("notebook.redo")
     }
 
     /// Beside a lecture: the title, where it's got to, and the same buttons, in one row.

@@ -308,9 +308,14 @@ struct PaperSheet: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
-                Text("Paper").textStyle(.h2).foregroundStyle(.ink)
+                Text("Change the paper").textStyle(.h2).foregroundStyle(.ink)
                 PaperPicker(template: $template, columns: 3, tileWidth: 76)
-                Rule()
+            }
+            .padding(20)
+        }
+        .accessibilityIdentifier("page.paper")
+        // The buttons stay in sight, however little of the sheet is up.
+        .safeAreaInset(edge: .bottom, spacing: 0) {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(spacing: 10) {
                         Button { apply(template, false); done() } label: { Text("Apply to page \(pageNumber)") }
@@ -327,11 +332,13 @@ struct PaperSheet: View {
                         .textStyle(.meta).foregroundStyle(.inkMuted)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-            }
-            .padding(20)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(.surface)
+                .overlay(alignment: .top) { Rule() }
         }
         .foregroundStyle(.ink)
         .background(.surface)
-        .accessibilityIdentifier("page.paper")
     }
 }
