@@ -18,6 +18,9 @@ final class JourneyTests: XCTestCase {
         tap(app.buttons["Try it with sample classes"], "setup's Try it with sample classes")
         expect(page(app, "home"), "Home after Try it with sample classes")
         expect(app.staticTexts["These are sample classes."], "the sample classes banner on Home")
+        // A phone's tabs are Home, Due, Ask and Search: the classes are an iPad's sidebar, never a More tab.
+        XCTAssertEqual(app.tabBars.buttons.count, 4, "four tabs")
+        XCTAssertFalse(app.tabBars.buttons["More"].exists, "no More tab")
     }
 
     // MARK: recording
@@ -92,6 +95,7 @@ final class JourneyTests: XCTestCase {
     func testAskSourceOpensTheLectureAtThatMinuteOnItsTranscript() {
         let app = launch()
         tap(app.tabBars.buttons["Ask"], "the Ask tab")
+        XCTAssertFalse(app.buttons["Record Calculus II"].exists, "no Record bar on Ask")
         ask(app, "How do I choose u in integration by parts?")
         tap(app.buttons["ask.source"].firstMatch, "the answer's source", timeout: 15)
         expect(page(app, "lecture"), "the lecture the answer came from")
