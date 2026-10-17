@@ -62,6 +62,9 @@ targets:
           NSAllowsArbitraryLoads: true
         UIBackgroundModes: [audio, fetch]
         NSSupportsLiveActivities: true
+        # Export compliance: the only encryption is the system's own (https through URLSession), which is exempt, so
+        # App Store Connect doesn't ask about it for each build.
+        ITSAppUsesNonExemptEncryption: false
         # Opened from another app's share sheet: recordings, PDFs and photos, and GoodNotes notebooks.
         CFBundleDocumentTypes:
           - CFBundleTypeName: Recording
