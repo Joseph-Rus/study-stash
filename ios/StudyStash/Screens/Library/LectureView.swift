@@ -27,6 +27,8 @@ struct LectureView: View {
     @State private var onlyMine = DebugLaunch.flag("-only-mine")
     @State private var asking = false
     @State private var studying = false
+    /// On screen (not under another tab, or under a page pushed over it).
+    @State private var showing = false
     @State private var picking = false
     @State private var confirmingDelete = false
     /// The title being typed over (nil: not renaming).
@@ -84,9 +86,12 @@ struct LectureView: View {
         .page()
         .foregroundStyle(.ink)
         .titleOnScroll(l.map(title) ?? "", after: 150)
-        // A reading room on a phone: the notes get the screen, and the foot of the page is Ask and Study.
-        .toolbar(compact ? .hidden : .automatic, for: .tabBar)
+        // A reading room on a phone: the notes get the screen, and the foot of the page is Ask and Study. Only while it
+        // shows: a link or a notification that opens another tab from here gets that tab's bar back.
+        .toolbar(compact && showing ? .hidden : .automatic, for: .tabBar)
         .hidesRecordBar(compact)
+        .onAppear { showing = true }
+        .onDisappear { showing = false }
         .recordsInto(l.flatMap(filed))
         .toolbar { toolbar(l) }
         .safeAreaInset(edge: .bottom, spacing: 0) { bottomBar(l) }
