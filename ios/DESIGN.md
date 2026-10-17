@@ -347,6 +347,8 @@ one) and `-quiet` (no notification prompt):
   `study:<id>`, `quiz:<id>`, `uses`, `widgets` (`WidgetGallery`, in `Shared/WidgetGallery.swift`), `components:1…4`
   (every shared piece)
 - `-ask "<question>"` with `-tab ask`; `-unpaired` (setup, no `-demo`), with `-pair-code` its second step
+- `-fake-mic`: made-up lines stand in for the microphone whenever Record is tapped, without opening the recorder at
+  launch (the journey tests use it)
 - Your own: read `DebugLaunch.flag("-x")` / `DebugLaunch.value("-x")` in your own file.
 
 The demo library: three classes (Calculus II yellow, Intro to Psychology green, Organic Chemistry orange); five notes:
@@ -356,6 +358,19 @@ and one handed in; Calculus II starting in 9 minutes (so Up next says "In 9 minu
 Calculus II"), then events tomorrow and after. Study makes each lecture's own flashcards and quiz; search passages
 carry the second they were said; Move to, Rename, Delete and Undo work while the app runs; a recording sent from the
 phone is "being written" for 30 seconds, then has notes round its typed lines.
+
+## Journey tests
+
+`StudyStashUITests/JourneyTests.swift` walks FLOWS.md's first run and core journeys with real taps on the demo library
+(Up next records into its class and Stop opens the lecture; a note, Study, Ask about this lecture and a source at its
+moment; Due to an assignment, its lectures and its class; Ask to a source on the Transcript; Search; Settings and Back;
+a class's Attach), follows every `studystash://` link, and on an iPad opens a class from the sidebar. Pages carry
+`page.<name>` accessibility identifiers (`home`, `class`, `lecture`, `assignment`, `due`, `settings`, `study`).
+
+```sh
+xcodebuild -project StudyStash.xcodeproj -scheme StudyStash -jobs 2 -destination "platform=iOS Simulator,id=<udid>" \
+  -derivedDataPath build/dd -only-testing:StudyStashUITests test
+```
 
 ## Pictures
 
