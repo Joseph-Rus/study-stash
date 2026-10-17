@@ -252,13 +252,7 @@ final class NotebookStore {
         if let pdfPage = pdf(n, page) {
             ctx.setFillColor(UIColor.white.cgColor)
             ctx.fill(rect)
-            ctx.saveGState()
-            let box = pdfPage.bounds(for: .mediaBox)
-            ctx.translateBy(x: 0, y: rect.height)
-            ctx.scaleBy(x: rect.width / box.width, y: -rect.height / box.height)
-            ctx.translateBy(x: -box.minX, y: -box.minY)
-            pdfPage.draw(with: .mediaBox, to: ctx)
-            ctx.restoreGState()
+            if let ref = pdfPage.pageRef { PaperDrawing.drawPDF(ref, in: rect, ctx: ctx) }
         } else {
             PaperDrawing.draw(page.paper, colour: page.colour, in: rect, ctx: ctx, hairline: hairline)
         }
@@ -272,16 +266,25 @@ final class NotebookStore {
         }
     }
 
-    /// The whole notebook as one PDF, a page each.
+    /// The whole notebook as one PDF, a page each, each its own size (a Letter page after a slide stays Letter).
     func pdfData(_ n: Notebook) -> Data {
-        let first = n.pages.first?.size ?? Notebook.letter
-        let renderer = UIGraphicsPDFRenderer(bounds: CGRect(origin: .zero, size: first))
-        return renderer.pdfData { r in
-            for page in n.pages {
-                r.beginPage(withBounds: CGRect(origin: .zero, size: page.size), pageInfo: [:])
-                render(n, page, in: r.cgContext)
-            }
+        let data = NSMutableData()
+        var first = CGRect(origin: .zero, size: n.pages.first?.size ?? Notebook.letter)
+        guard let consumer = CGDataConsumer(data: data as CFMutableData),
+              let ctx = CGContext(consumer: consumer, mediaBox: &first, nil) else { return Data() }
+        for page in n.pages {
+            var box = CGRect(origin: .zero, size: page.size)
+            ctx.beginPDFPage([kCGPDFContextMediaBox as String: Data(bytes: &box, count: MemoryLayout<CGRect>.size)] as CFDictionary)
+            ctx.saveGState()
+            // The page is drawn y down, as on screen.
+            ctx.translateBy(x: 0, y: box.height)
+            ctx.scaleBy(x: 1, y: -1)
+            render(n, page, in: ctx)
+            ctx.restoreGState()
+            ctx.endPDFPage()
         }
+        ctx.closePDF()
+        return data as Data
     }
 
     /// The first page, small: a notebook on a shelf.
@@ -329,8 +332,8 @@ final class NotebookStore {
         guard (try? data.write(to: dir(n).appending(path: name))) != nil else { return nil }
         return (0..<doc.pageCount).compactMap { i in
             guard let p = doc.page(at: i) else { return nil }
-            // A page turned sideways in the PDF is shown as it's read.
-            var box = p.bounds(for: .mediaBox).size
+            // The page as a viewer shows it: its crop box, turned as the PDF says.
+            var box = p.bounds(for: .cropBox).size
             if p.rotation % 180 != 0 { box = CGSize(width: box.height, height: box.width) }
             return Notebook.Page(width: box.width, height: box.height, paper: .plain, pdf: name, pdfPage: i + 1)
         }
@@ -508,6 +511,28 @@ enum PaperDrawing {
                 label("Summary", at: CGPoint(x: rect.minX + 18, y: summaryTop + 15), ink: ink.label, ctx: ctx)
             }
         }
+        ctx.restoreGState()
+    }
+
+    /// A PDF's page filling `rect` (y down), as a viewer shows it: its crop box, turned as the PDF says.
+    static func drawPDF(_ page: CGPDFPage, in rect: CGRect, ctx: CGContext) {
+        let box = page.getBoxRect(.cropBox)
+        let angle = ((Int(page.rotationAngle) % 360) + 360) % 360
+        let upright = angle % 180 == 0 ? box.size : CGSize(width: box.height, height: box.width)
+        guard upright.width > 0, upright.height > 0 else { return }
+        ctx.saveGState()
+        ctx.clip(to: rect)
+        // The PDF's own space is y up.
+        ctx.translateBy(x: rect.minX, y: rect.maxY)
+        ctx.scaleBy(x: rect.width / upright.width, y: -rect.height / upright.height)
+        switch angle {
+        case 90: ctx.translateBy(x: 0, y: upright.height); ctx.rotate(by: -.pi / 2)
+        case 180: ctx.translateBy(x: upright.width, y: upright.height); ctx.rotate(by: .pi)
+        case 270: ctx.translateBy(x: upright.width, y: 0); ctx.rotate(by: .pi / 2)
+        default: break
+        }
+        ctx.translateBy(x: -box.minX, y: -box.minY)
+        ctx.drawPDFPage(page)
         ctx.restoreGState()
     }
 

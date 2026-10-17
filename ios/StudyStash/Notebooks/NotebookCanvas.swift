@@ -104,6 +104,9 @@ final class NotebookCanvas: NSObject {
         redoTap.delegate = self
         canvas.addGestureRecognizer(redoTap)
 
+        // Pictures: `-notebook-zoom 0.5` opens at half the fitted size.
+        if let zoom = DebugLaunch.value("-notebook-zoom").flatMap(Double.init) { zoomFactor = zoom }
+
         picker.stateAutosaveName = "notebook"
         picker.colorUserInterfaceStyle = .light
         picker.addObserver(canvas)
@@ -516,12 +519,7 @@ final class PaperTile: CATiledLayer {
         if let pdf {
             ctx.setFillColor(UIColor.white.cgColor)
             ctx.fill(rect)
-            ctx.saveGState()
-            ctx.translateBy(x: 0, y: rect.height)
-            ctx.scaleBy(x: 1, y: -1)
-            ctx.concatenate(pdf.getDrawingTransform(.mediaBox, rect: rect, rotate: 0, preserveAspectRatio: false))
-            ctx.drawPDFPage(pdf)
-            ctx.restoreGState()
+            PaperDrawing.drawPDF(pdf, in: rect, ctx: ctx)
         } else {
             PaperDrawing.draw(paper, colour: colour, in: rect, ctx: ctx)
         }
