@@ -111,6 +111,12 @@ final class DemoLibrary: URLProtocol, @unchecked Sendable {
             return json(overview)
         case ("GET", "/api/v2/voice-memos"):
             return json(["memos": []])
+        // Setup's pictures and tests: 123456 pairs, any other code is refused in the library's words.
+        case ("POST", "/api/v2/devices/pair"):
+            guard sent["code"] as? String == "123456" else {
+                return json(["error": "That code isn't right, or it's more than ten minutes old. Make a new one in Study Stash's Settings."], 401)
+            }
+            return json(["device": ["id": "demo", "name": sent["name"] as? String ?? "This phone", "added": iso(0)]])
         default:
             return json(["detail": "The demo library doesn't do that."], 404)
         }

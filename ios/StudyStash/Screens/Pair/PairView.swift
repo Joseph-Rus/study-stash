@@ -11,7 +11,9 @@ import VisionKit
 // The way through (FLOWS.md, "First run"): Welcome → Open Study Stash on your computer (scan its code with this app,
 // or type the address) → [This phone can't reach your computer yet, only if it can't] → Found {library}: the 6 digits
 // → [What it's for, only if the library hasn't been told] → You're in: what to do next → Home. Or, from Welcome: Try
-// it with sample classes → Home, with the demo library.
+// it with sample classes → Home, with the demo library. A QR code that carries the 6 digits too (`#code=042917`, from a
+// computer on a newer Study Stash) skips typing them: the phone pairs as soon as it finds the library, and only shows
+// the code page if that code is refused (used, too old), with the library's words, to type a fresh one.
 
 /// Setup: adding this phone to a library, or trying the sample classes.
 struct PairView: View {
@@ -21,7 +23,9 @@ struct PairView: View {
     @State private var path: [SetupPage] = SetupDebug.path
     @State private var scanning = false
     /// Asking an address whether it's a library.
-    @State private var finding = SetupDebug.page == "finding"
+    @State private var finding = SetupDebug.page == "finding" || SetupDebug.page == "connecting"
+    /// Found it, and pairing with the code the QR code brought.
+    @State private var connecting = SetupDebug.page == "connecting"
     /// What went wrong on the page that's open (a scan that isn't an address, a camera that's off).
     @State private var problem: String?
     @State private var address = SetupDebug.page == "address" ? "mac-mini.tail1234.ts.net" : ""
@@ -60,6 +64,11 @@ struct PairView: View {
             if SetupDebug.joins, joined == nil {
                 joined = await Joined.read(base: DemoLibrary.base, library: SetupDebug.demo, needsUses: SetupDebug.page == "uses")
             }
+            // As if this was scanned (the demo library's address, with a code or without).
+            if let scanned = SetupDebug.scanned {
+                path = [.connect]
+                await find(scanned)
+            }
         }
     }
 
@@ -71,8 +80,8 @@ struct PairView: View {
                     case .connect: connect
                     case .address: typeAddress
                     case .cantReach(let detail): cantReach(detail)
-                    case let .code(base, library):
-                        CodeEntry(base: base, library: library) { joined in
+                    case let .code(base, library, refused):
+                        CodeEntry(base: base, library: library, problem: refused) { joined in
                             remember(joined)
                             path.append(joined.needsUses ? .uses : .done)
                         } differentComputer: {
@@ -133,7 +142,7 @@ struct PairView: View {
                 HStack(spacing: 8) {
                     if finding {
                         ProgressView().tint(.surface)
-                        Text("Finding your library…")
+                        Text(connecting ? "Connecting…" : "Finding your library…")
                     } else {
                         Icon("qr_code_scanner", size: 18)
                         Text("Scan the QR code")
@@ -229,8 +238,9 @@ struct PairView: View {
         path.append(.address)
     }
 
-    /// Try each address the scan or the typing gave, best first, until one is a library. Found: the code. Not found:
-    /// the Tailscale page (or it stays, saying what the library said this time).
+    /// Try each address the scan or the typing gave, best first, until one is a library. Found: the code, or, when
+    /// the scan brought the code, straight on (`ScanPairing`). Not found: the Tailscale page (or it stays, saying what
+    /// the library said this time).
     private func find(_ text: String) async {
         let candidates = LibraryAddress.candidates(from: text)
         guard !candidates.isEmpty else {
@@ -245,9 +255,16 @@ struct PairView: View {
         for base in candidates {
             do {
                 let me = try await APIClient(base: base, session: AppModel.session).me()
-                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                let code = LibraryAddress.code(from: text)
+                connecting = code != nil
+                defer { connecting = false }
+                let (page, joined) = await ScanPairing.next(base: base, library: me.library, code: code) { code in
+                    try await Joined.pair(base: base, library: me.library, code: code, name: UIDevice.current.name)
+                }
+                if let joined { remember(joined) }
+                UINotificationFeedbackGenerator().notificationOccurred(joined != nil || code == nil ? .success : .error)
                 if case .cantReach? = path.last { path.removeLast() }
-                path.append(.code(base: base, library: me.library))
+                path.append(page)
                 return
             } catch {
                 said = (error as? APIError)?.detail ?? said
@@ -272,9 +289,28 @@ enum SetupPage: Hashable {
     case connect
     case address
     case cantReach(detail: String)
-    case code(base: URL, library: Me.Library)
+    /// `problem`: why the code the QR code brought was refused, in the library's words.
+    case code(base: URL, library: Me.Library, problem: String? = nil)
     case uses
     case done
+}
+
+/// What follows finding the library. With a code from the QR code, pairing at once (the code page skipped): paired,
+/// "What it's for" if the library hasn't been told, else "You're in"; refused (used, more than ten minutes old, too
+/// many tries) or unreachable, the code page with the library's words, to type a fresh one. Without a code (a computer
+/// that isn't updated yet), the code page, as always.
+@MainActor enum ScanPairing {
+    static func next(base: URL, library: Me.Library, code: String?,
+                     pair: (String) async throws -> Joined) async -> (page: SetupPage, joined: Joined?) {
+        guard let code else { return (.code(base: base, library: library), nil) }
+        do {
+            let joined = try await pair(code)
+            return (joined.needsUses ? .uses : .done, joined)
+        } catch {
+            let words = (error as? APIError)?.detail ?? APIError.unreachableLibrary.detail
+            return (.code(base: base, library: library, problem: words), nil)
+        }
+    }
 }
 
 /// Where a student gets Study Stash for their computer, and Tailscale for the phone.
@@ -291,6 +327,13 @@ struct Joined: Hashable {
     var needsUses: Bool
     var next: UpcomingEvent?
     var newest: LectureSummary?
+
+    /// Pair this phone with the code the computer showed (the library sets the `device` cookie), then read what the
+    /// last steps need.
+    @MainActor static func pair(base: URL, library: Me.Library, code: String, name: String) async throws -> Joined {
+        _ = try await APIClient(base: base, session: AppModel.session).pair(code: code, name: name)
+        return await read(base: base, library: library)
+    }
 
     /// Read what the last steps need, a few seconds at most for each (without them the steps say less).
     @MainActor static func read(base: URL, library: Me.Library, needsUses: Bool? = nil) async -> Joined {
@@ -335,7 +378,17 @@ private struct CodeEntry: View {
     @State private var code = SetupDebug.page == "typing" ? "042" : ""
     @State private var name = UIDevice.current.name
     @State private var busy = false
-    @State private var problem: String? = SetupDebug.page == "wrong" ? CodeEntry.wrongCode : nil
+    @State private var problem: String?
+
+    /// `problem`: why the code the QR code brought was refused, shown under the boxes as a typed one's would be.
+    init(base: URL, library: Me.Library, problem: String? = nil, joined: @escaping (Joined) -> Void,
+         differentComputer: @escaping () -> Void) {
+        self.base = base
+        self.library = library
+        self.joined = joined
+        self.differentComputer = differentComputer
+        _problem = State(initialValue: SetupDebug.page == "wrong" ? CodeEntry.wrongCode : problem)
+    }
     @State private var shakes: CGFloat = 0
     @FocusState private var focus: Field?
 
@@ -415,12 +468,11 @@ private struct CodeEntry: View {
         busy = true
         defer { busy = false }
         do {
-            let api = APIClient(base: base, session: AppModel.session)
             let typed = name.trimmingCharacters(in: .whitespaces)
-            _ = try await api.pair(code: code, name: typed.isEmpty ? UIDevice.current.name : typed)
+            let paired = try await Joined.pair(base: base, library: library, code: code, name: typed.isEmpty ? UIDevice.current.name : typed)
             UINotificationFeedbackGenerator().notificationOccurred(.success)
             focus = nil
-            joined(await Joined.read(base: base, library: library))
+            joined(paired)
         } catch {
             UINotificationFeedbackGenerator().notificationOccurred(.error)
             problem = (error as? APIError)?.detail ?? "Couldn't reach your library. Try again."
@@ -1053,18 +1105,21 @@ struct QRScanner: UIViewControllerRepresentable {
 // MARK: - Pictures
 
 /// Setup's own launch arguments (debug builds), for pictures of each page and state with `-unpaired`:
-/// `-pair-page connect | finding | address | cant-reach | code | typing | wrong | uses | done` (`-pair-code` is
-/// `-pair-page code`). The code pages use the demo library's address, which never pairs; `uses` and `done` read the
-/// demo library as if this phone had just joined it.
+/// `-pair-page connect | finding | connecting | address | cant-reach | code | typing | wrong | uses | done`
+/// (`-pair-code` is `-pair-page code`). The code pages use the demo library's address, which pairs only with 123456;
+/// `uses` and `done` read the demo library as if this phone had just joined it. `-pair-scan <text>` goes through
+/// setup as if `text` had been scanned: `-pair-scan 'https://demo.studystash.app/app/#code=123456'` pairs at once,
+/// `#code=000000` is refused (the code page, with the library's words), no code is the code page.
 private enum SetupDebug {
     static let page: String? = DebugLaunch.flag("-pair-code") ? "code" : DebugLaunch.value("-pair-page")
+    static let scanned: String? = DebugLaunch.value("-pair-scan")
     static let demo = Me.Library(name: "Demo library", version: "demo")
     /// The last steps, which need a library joined.
     static var joins: Bool { page == "uses" || page == "done" }
 
     static var path: [SetupPage] {
         switch page {
-        case "connect", "finding": [.connect]
+        case "connect", "finding", "connecting": [.connect]
         case "address": [.connect, .address]
         case "cant-reach": [.connect, .cantReach(detail: APIError.unreachableLibrary.detail)]
         case "code", "typing", "wrong": [.connect, .code(base: DemoLibrary.base, library: demo)]

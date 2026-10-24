@@ -26,6 +26,25 @@ final class JourneyTests: XCTestCase {
         expect(app.staticTexts["Open Study Stash on your computer"], "setup's On your computer step")
     }
 
+    /// A QR code that brings its 6 digits pairs without typing them; one whose code is refused opens the code page with
+    /// the library's words. (`-pair-scan` goes through setup as if it had been scanned; the demo pairs only 123456.)
+    func testScannedCodePairsWithoutTyping() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-unpaired", "-quiet", "-pair-scan", "https://demo.studystash.app/app/#code=123456"]
+        app.launch()
+        expect(app.staticTexts["You're in"], "You're in, straight from the scan", timeout: 15)
+        XCTAssertFalse(app.staticTexts["Found Demo library"].exists, "no code page")
+        tap(app.buttons["Go to Home"], "Go to Home")
+        expect(page(app, "home"), "Home after pairing")
+
+        app.terminate()
+        app.launchArguments = ["-unpaired", "-quiet", "-pair-scan", "https://demo.studystash.app/app/#code=000000"]
+        app.launch()
+        expect(app.staticTexts["Found Demo library"], "the code page, for a refused code", timeout: 15)
+        expect(app.staticTexts["That code isn't right, or it's more than ten minutes old. Make a new one in Study Stash's Settings."],
+               "the library's words")
+    }
+
     // MARK: recording
 
     func testUpNextRecordsIntoItsClassAndStopOpensTheLecture() {

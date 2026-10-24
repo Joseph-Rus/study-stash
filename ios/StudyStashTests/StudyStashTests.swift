@@ -25,6 +25,66 @@ import Testing
         #expect(LibraryAddress.candidates(from: "").isEmpty)
         #expect(LibraryAddress.candidates(from: "ftp://example.com").isEmpty)
     }
+
+    @Test func qrCodeWithItsCodeGivesTheSameAddressesAndTheCode() {
+        let qr = "http://100.64.0.1:8787/app/?https=https%3A%2F%2Fmac.tail1234.ts.net%3A8443%2Fapp%2F#code=042917"
+        #expect(LibraryAddress.candidates(from: qr).map(\.absoluteString) == [
+            "https://mac.tail1234.ts.net:8443", "http://100.64.0.1:8787",
+        ])
+        #expect(LibraryAddress.code(from: qr) == "042917")
+        #expect(LibraryAddress.code(from: "http://100.64.0.1:8787/app/?code=042917") == "042917")
+        #expect(LibraryAddress.code(from: "100.64.0.1:8787#code=042917") == "042917")
+        #expect(LibraryAddress.candidates(from: "100.64.0.1#code=042917").map(\.absoluteString) == ["http://100.64.0.1"])
+        #expect(LibraryAddress.code(from: "mac.tail1234.ts.net:8443/app/#code=042%20917") == "042917")
+    }
+
+    @Test func noCodeOrNotSixDigitsAsksForIt() {
+        #expect(LibraryAddress.code(from: "http://100.64.0.1:8787/app/?https=https%3A%2F%2Fmac.tail1234.ts.net%3A8443%2Fapp%2F") == nil)
+        #expect(LibraryAddress.code(from: "mac.tail1234.ts.net:8443") == nil)
+        #expect(LibraryAddress.code(from: "http://100.64.0.1:8787/app/#code=04291") == nil)
+        #expect(LibraryAddress.code(from: "http://100.64.0.1:8787/app/#code=abcdef") == nil)
+        #expect(LibraryAddress.code(from: "") == nil)
+    }
+}
+
+// MARK: - pairing with the code the QR code brought
+
+@MainActor @Suite struct ScanPairingTests {
+    let base = URL(string: "http://100.64.0.1:8787")!
+    let library = Me.Library(name: "Joey's library", version: "0.17.2")
+    func joined(needsUses: Bool) -> Joined { Joined(base: base, library: library, needsUses: needsUses) }
+
+    @Test func aCodeFromTheScanPairsAndSkipsTheCodePage() async {
+        var sent: String?
+        let (page, joined) = await ScanPairing.next(base: base, library: library, code: "042917") { code in
+            sent = code
+            return self.joined(needsUses: false)
+        }
+        #expect(sent == "042917")
+        #expect(page == .done)
+        #expect(joined?.library == library)
+        let (first, _) = await ScanPairing.next(base: base, library: library, code: "042917") { _ in self.joined(needsUses: true) }
+        #expect(first == .uses)
+    }
+
+    @Test func aRefusedCodeOpensTheCodePageWithTheLibrarysWords() async {
+        let words = "That code isn't right, or it's more than ten minutes old. Make a new one in Study Stash's Settings."
+        let (page, joined) = await ScanPairing.next(base: base, library: library, code: "042917") { _ in
+            throw APIError(status: 401, detail: words)
+        }
+        #expect(page == .code(base: base, library: library, problem: words))
+        #expect(joined == nil)
+    }
+
+    @Test func noCodeIsTheCodePageAsBefore() async {
+        var asked = false
+        let (page, _) = await ScanPairing.next(base: base, library: library, code: nil) { _ in
+            asked = true
+            return self.joined(needsUses: false)
+        }
+        #expect(!asked)
+        #expect(page == .code(base: base, library: library))
+    }
 }
 
 // MARK: - the client
