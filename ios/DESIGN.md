@@ -347,7 +347,7 @@ one) and `-quiet` (no notification prompt):
   `study:<id>`, `quiz:<id>`, `uses`, `widgets` (`WidgetGallery`, in `Shared/WidgetGallery.swift`), `components:1…4`
   (every shared piece)
 - `-ask "<question>"` with `-tab ask`; `-unpaired` (setup, no `-demo`), with `-pair-code` its second step, or
-  `-pair-page connect|finding|connecting|address|cant-reach|code|typing|wrong|uses|done` any page of it;
+  `-pair-page connect|finding|connecting|camera-off|address|cant-reach|code|typing|wrong|uses|done` any page of it;
   `-pair-scan '<scanned text>'` goes through setup as if that was scanned (the demo library's address,
   `https://demo.studystash.app/app/#code=123456`, pairs at once; `#code=000000` is refused; no `#code` asks for it)
 - `-fake-mic`: made-up lines stand in for the microphone whenever Record is tapped, without opening the recorder at

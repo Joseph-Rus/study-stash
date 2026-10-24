@@ -1,3 +1,4 @@
+import AVFoundation
 import SwiftUI
 import UIKit
 import UserNotifications
@@ -19,6 +20,7 @@ import VisionKit
 struct PairView: View {
     @Environment(AppModel.self) private var app
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.scenePhase) private var scenePhase
 
     @State private var path: [SetupPage] = SetupDebug.path
     @State private var scanning = false
@@ -27,7 +29,9 @@ struct PairView: View {
     /// Found it, and pairing with the code the QR code brought.
     @State private var connecting = SetupDebug.page == "connecting"
     /// What went wrong on the page that's open (a scan that isn't an address, a camera that's off).
-    @State private var problem: String?
+    @State private var problem: String? = SetupDebug.page == "camera-off" ? PairView.cameraWords : nil
+    /// The camera's been refused: the ink button opens Settings instead of the camera.
+    @State private var cameraOff = SetupDebug.page == "camera-off"
     @State private var address = SetupDebug.page == "address" ? "mac-mini.tail1234.ts.net" : ""
     /// What was scanned or typed last, for Try again.
     @State private var tried = ""
@@ -49,6 +53,15 @@ struct PairView: View {
             } typeInstead: {
                 scanning = false
                 path.append(.address)
+            }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active else { return }
+            // Back from the Tailscale app (or Settings): try again without being asked, and scan once the camera's on.
+            if case .cantReach? = path.last, !finding { Task { await find(tried) } }
+            if cameraOff, AVCaptureDevice.authorizationStatus(for: .video) == .authorized {
+                cameraOff = false
+                problem = nil
             }
         }
         .onAppear {
@@ -138,11 +151,14 @@ struct PairView: View {
             Text("Use this button, not the Camera app.")
                 .textStyle(.meta)
                 .foregroundStyle(.inkMuted)
-            Button { scan() } label: {
+            Button { if cameraOff { openSettings() } else { Task { await scan() } } } label: {
                 HStack(spacing: 8) {
                     if finding {
                         ProgressView().tint(.surface)
                         Text(connecting ? "Connecting…" : "Finding your library…")
+                    } else if cameraOff {
+                        Icon("settings", size: 18)
+                        Text("Turn on the camera")
                     } else {
                         Icon("qr_code_scanner", size: 18)
                         Text("Scan the QR code")
@@ -170,7 +186,7 @@ struct PairView: View {
             Button { Task { await find(address) } } label: {
                 HStack(spacing: 8) {
                     if finding { ProgressView().tint(.surface) }
-                    Text(finding ? "Finding your library…" : "Find it")
+                    Text(finding ? (connecting ? "Connecting…" : "Finding your library…") : "Find it")
                 }
                 .frame(maxWidth: .infinity)
             }
@@ -191,7 +207,7 @@ struct PairView: View {
             Button { Task { await find(tried) } } label: {
                 HStack(spacing: 8) {
                     if finding { ProgressView().tint(.surface) }
-                    Text(finding ? "Finding your library…" : "Try again")
+                    Text(finding ? (connecting ? "Connecting…" : "Finding your library…") : "Try again")
                 }
                 .frame(maxWidth: .infinity)
             }
@@ -219,18 +235,31 @@ struct PairView: View {
         }
     }
 
-    private func scan() {
+    static let cameraWords = "Study Stash isn't allowed to use the camera. Turn it on in Settings, or type the address instead."
+
+    /// The camera, asked for here the first time (the system's question, with the reason from Info.plist); refused,
+    /// the button turns into the way to Settings.
+    private func scan() async {
         problem = nil
         guard DataScannerViewController.isSupported else {
             // No camera that reads codes (an old phone, the simulator): type it.
             path.append(.address)
             return
         }
+        if AVCaptureDevice.authorizationStatus(for: .video) == .notDetermined {
+            _ = await AVCaptureDevice.requestAccess(for: .video)
+        }
         guard DataScannerViewController.isAvailable else {
-            problem = "Study Stash can't use the camera. Allow it in the Settings app, then Study Stash, or type the address instead."
+            cameraOff = true
+            problem = Self.cameraWords
             return
         }
+        cameraOff = false
         scanning = true
+    }
+
+    private func openSettings() {
+        if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
     }
 
     private func typeAddressInstead() {
@@ -672,7 +701,7 @@ private struct YoureIn: View {
     }
 
     private func about(_ l: LectureSummary) -> String {
-        let title = l.title ?? Nouns.untitled(folder: l.class, date: l.date)
+        let title = (l.title?.isEmpty == false ? l.title : nil) ?? Nouns.untitled(folder: l.class, date: l.date)
         guard let d = Format.parse(l.date) else { return title }
         return "\(title) · \(Format.day(d))"
     }
@@ -1105,7 +1134,7 @@ struct QRScanner: UIViewControllerRepresentable {
 // MARK: - Pictures
 
 /// Setup's own launch arguments (debug builds), for pictures of each page and state with `-unpaired`:
-/// `-pair-page connect | finding | connecting | address | cant-reach | code | typing | wrong | uses | done`
+/// `-pair-page connect | finding | connecting | camera-off | address | cant-reach | code | typing | wrong | uses | done`
 /// (`-pair-code` is `-pair-page code`). The code pages use the demo library's address, which pairs only with 123456;
 /// `uses` and `done` read the demo library as if this phone had just joined it. `-pair-scan <text>` goes through
 /// setup as if `text` had been scanned: `-pair-scan 'https://demo.studystash.app/app/#code=123456'` pairs at once,
@@ -1119,7 +1148,7 @@ private enum SetupDebug {
 
     static var path: [SetupPage] {
         switch page {
-        case "connect", "finding", "connecting": [.connect]
+        case "connect", "finding", "connecting", "camera-off": [.connect]
         case "address": [.connect, .address]
         case "cant-reach": [.connect, .cantReach(detail: APIError.unreachableLibrary.detail)]
         case "code", "typing", "wrong": [.connect, .code(base: DemoLibrary.base, library: demo)]
