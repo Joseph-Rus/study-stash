@@ -10,20 +10,13 @@ import UIKit
 /// can be written on). Saved to the library as a PDF in a class (and a lecture), where it's read, handwriting too, for
 /// notes and Ask; saved again, it replaces the copy there.
 struct Notebook: Codable, Identifiable, Hashable, Sendable {
-    /// What a page is printed with. `lined` is wide ruled (its name from before narrow ruling came).
+    /// What a page is printed with, in the picker's order. The raw value is what a saved notebook keeps, so it's never
+    /// renamed (`lined` is wide ruled, its name from before narrow ruling came); a paper this version doesn't know
+    /// opens blank. Each paper's name, line spacing and drawing are its one entry in `PaperDrawing.style(_:)`.
     enum Paper: String, Codable, CaseIterable, Sendable {
         case plain, narrow, lined, grid, dotted, cornell
 
-        var name: String {
-            switch self {
-            case .plain: "Blank"
-            case .narrow: "Narrow ruled"
-            case .lined: "Wide ruled"
-            case .grid: "Grid"
-            case .dotted: "Dotted"
-            case .cornell: "Cornell notes"
-            }
-        }
+        var name: String { PaperDrawing.style(self).name }
     }
 
     /// The paper's own colour. The ink is the student's, whatever the paper.
@@ -422,96 +415,131 @@ enum PaperDrawing {
         }
     }
 
-    /// Where the ruling starts, and how far apart its lines are.
-    static let top: CGFloat = 72
-    static let margin: CGFloat = 60
-    static func spacing(_ paper: Notebook.Paper) -> CGFloat {
+    /// A paper: its name in the picker, how far apart its lines are (0 for none), and how it's printed on a page.
+    struct Style {
+        var name: String
+        var spacing: CGFloat
+        var draw: (Sheet) -> Void
+    }
+
+    /// Every paper, one entry each. A new paper is a case in `Notebook.Paper` and its entry here (the compiler asks
+    /// for it); the picker, the page, the pages view and the PDF all draw it from this.
+    static func style(_ paper: Notebook.Paper) -> Style {
         switch paper {
-        case .narrow, .cornell: 20.25 // 9/32 inch, college ruled
-        case .lined: 26 // wide ruled, as notebooks from before had it
-        case .grid, .dotted: 18 // a quarter inch
-        case .plain: 0
+        case .plain: Style(name: "Blank", spacing: 0) { _ in }
+        case .narrow: Style(name: "Narrow ruled", spacing: 20.25, draw: ruled) // 9/32 inch, college ruled
+        case .lined: Style(name: "Wide ruled", spacing: 26, draw: ruled) // as notebooks from before had it
+        case .grid: Style(name: "Grid", spacing: 18, draw: grid) // a quarter inch
+        case .dotted: Style(name: "Dotted", spacing: 18, draw: dotted)
+        case .cornell: Style(name: "Cornell notes", spacing: 20.25, draw: cornell)
         }
     }
+
+    /// Where the ruling starts, and how far apart a paper's lines are.
+    static let top: CGFloat = 72
+    static let margin: CGFloat = 60
+    static func spacing(_ paper: Notebook.Paper) -> CGFloat { style(paper).spacing }
 
     /// Cornell notes: the cue column's width, and the summary box's height at the foot.
     static let cueWidth: CGFloat = 180
     static let summaryHeight: CGFloat = 144
 
+    /// A page being printed, for a paper's drawing: where, its colours, its line spacing, and the thinnest a line may
+    /// be in page units (a picture drawn small keeps its lines visible).
+    struct Sheet {
+        var rect: CGRect
+        var ctx: CGContext
+        var ink: Inks
+        var step: CGFloat
+        var hairline: CGFloat
+        var fine: CGFloat { max(0.5, hairline) }
+
+        func hline(_ y: CGFloat, from x0: CGFloat? = nil, to x1: CGFloat? = nil) {
+            ctx.move(to: CGPoint(x: x0 ?? rect.minX, y: y)); ctx.addLine(to: CGPoint(x: x1 ?? rect.maxX, y: y))
+        }
+        func vline(_ x: CGFloat, from y0: CGFloat? = nil, to y1: CGFloat? = nil) {
+            ctx.move(to: CGPoint(x: x, y: y0 ?? rect.minY)); ctx.addLine(to: CGPoint(x: x, y: y1 ?? rect.maxY))
+        }
+    }
+
     /// `hairline` is the thinnest a line may be, in page units (a picture drawn small keeps its lines visible).
     static func draw(_ paper: Notebook.Paper, colour: Notebook.PaperColour, in rect: CGRect, ctx: CGContext, hairline: CGFloat = 0) {
         let ink = inks(colour)
+        let style = style(paper)
         ctx.saveGState()
         ctx.setFillColor(ink.ground.cgColor)
         ctx.fill(rect)
-        let fine = max(0.5, hairline)
-        let step = spacing(paper)
-        func hline(_ y: CGFloat, from x0: CGFloat = rect.minX, to x1: CGFloat = rect.maxX) {
-            ctx.move(to: CGPoint(x: x0, y: y)); ctx.addLine(to: CGPoint(x: x1, y: y))
-        }
-        func vline(_ x: CGFloat, from y0: CGFloat = rect.minY, to y1: CGFloat = rect.maxY) {
-            ctx.move(to: CGPoint(x: x, y: y0)); ctx.addLine(to: CGPoint(x: x, y: y1))
-        }
-        switch paper {
-        case .plain: break
-        case .narrow, .lined:
-            // The header line, then the ruling to half an inch from the foot, and the margin.
-            ctx.setStrokeColor(ink.rule.cgColor)
-            ctx.setLineWidth(fine)
-            var y = rect.minY + top + step
-            while y < rect.maxY - 36 { hline(y); y += step }
-            ctx.strokePath()
-            ctx.setStrokeColor(ink.strong.cgColor)
-            ctx.setLineWidth(max(0.75, hairline))
-            hline(rect.minY + top)
-            ctx.strokePath()
-            ctx.setStrokeColor(ink.margin.cgColor)
-            ctx.setLineWidth(max(0.6, hairline))
-            vline(rect.minX + margin)
-            ctx.strokePath()
-        case .grid:
-            // Square to the edges, centred so the page has the same part-square at each side.
-            ctx.setStrokeColor(ink.rule.cgColor)
-            ctx.setLineWidth(max(0.4, hairline))
-            let ox = rect.width.truncatingRemainder(dividingBy: step) / 2, oy = rect.height.truncatingRemainder(dividingBy: step) / 2
-            var x = rect.minX + ox + (ox < 1 ? step : 0)
-            while x < rect.maxX - 0.5 { vline(x); x += step }
-            var y = rect.minY + oy + (oy < 1 ? step : 0)
-            while y < rect.maxY - 0.5 { hline(y); y += step }
-            ctx.strokePath()
-        case .dotted:
-            ctx.setFillColor(ink.dot.cgColor)
-            let r = max(0.85, hairline * 0.9)
-            let ox = rect.width.truncatingRemainder(dividingBy: step) / 2, oy = rect.height.truncatingRemainder(dividingBy: step) / 2
-            var y = rect.minY + oy + (oy < 1 ? step : 0)
-            while y < rect.maxY - 0.5 {
-                var x = rect.minX + ox + (ox < 1 ? step : 0)
-                while x < rect.maxX - 0.5 { ctx.fillEllipse(in: CGRect(x: x - r, y: y - r, width: 2 * r, height: 2 * r)); x += step }
-                y += step
-            }
-        case .cornell:
-            // A title band, the cue column and the notes ruled across, and the summary at the foot.
-            let summaryTop = rect.maxY - summaryHeight
-            ctx.setStrokeColor(ink.rule.cgColor)
-            ctx.setLineWidth(fine)
-            var y = rect.minY + top + step
-            while y < summaryTop - 4 { hline(y); y += step }
-            y = summaryTop + step + 6
-            while y < rect.maxY - 24 { hline(y, from: rect.minX + 18, to: rect.maxX - 18); y += step }
-            ctx.strokePath()
-            ctx.setStrokeColor(ink.strong.cgColor)
-            ctx.setLineWidth(max(0.8, hairline))
-            hline(rect.minY + top)
-            hline(summaryTop)
-            vline(rect.minX + cueWidth, from: rect.minY + top, to: summaryTop)
-            ctx.strokePath()
-            if hairline < 0.6 {
-                label("Cues", at: CGPoint(x: rect.minX + 18, y: rect.minY + top - 6), ink: ink.label, ctx: ctx)
-                label("Notes", at: CGPoint(x: rect.minX + cueWidth + 14, y: rect.minY + top - 6), ink: ink.label, ctx: ctx)
-                label("Summary", at: CGPoint(x: rect.minX + 18, y: summaryTop + 15), ink: ink.label, ctx: ctx)
-            }
-        }
+        style.draw(Sheet(rect: rect, ctx: ctx, ink: ink, step: style.spacing, hairline: hairline))
         ctx.restoreGState()
+    }
+
+    /// Narrow and wide ruled: the header line, then the ruling to half an inch from the foot, and the margin.
+    private static func ruled(_ s: Sheet) {
+        let (rect, ctx, ink, step, hairline) = (s.rect, s.ctx, s.ink, s.step, s.hairline)
+        ctx.setStrokeColor(ink.rule.cgColor)
+        ctx.setLineWidth(s.fine)
+        var y = rect.minY + top + step
+        while y < rect.maxY - 36 { s.hline(y); y += step }
+        ctx.strokePath()
+        ctx.setStrokeColor(ink.strong.cgColor)
+        ctx.setLineWidth(max(0.75, hairline))
+        s.hline(rect.minY + top)
+        ctx.strokePath()
+        ctx.setStrokeColor(ink.margin.cgColor)
+        ctx.setLineWidth(max(0.6, hairline))
+        s.vline(rect.minX + margin)
+        ctx.strokePath()
+    }
+
+    /// Square to the edges, centred so the page has the same part-square at each side.
+    private static func grid(_ s: Sheet) {
+        let (rect, ctx, ink, step, hairline) = (s.rect, s.ctx, s.ink, s.step, s.hairline)
+        ctx.setStrokeColor(ink.rule.cgColor)
+        ctx.setLineWidth(max(0.4, hairline))
+        let ox = rect.width.truncatingRemainder(dividingBy: step) / 2, oy = rect.height.truncatingRemainder(dividingBy: step) / 2
+        var x = rect.minX + ox + (ox < 1 ? step : 0)
+        while x < rect.maxX - 0.5 { s.vline(x); x += step }
+        var y = rect.minY + oy + (oy < 1 ? step : 0)
+        while y < rect.maxY - 0.5 { s.hline(y); y += step }
+        ctx.strokePath()
+    }
+
+    /// Dots where a grid's lines would cross.
+    private static func dotted(_ s: Sheet) {
+        let (rect, ctx, ink, step, hairline) = (s.rect, s.ctx, s.ink, s.step, s.hairline)
+        ctx.setFillColor(ink.dot.cgColor)
+        let r = max(0.85, hairline * 0.9)
+        let ox = rect.width.truncatingRemainder(dividingBy: step) / 2, oy = rect.height.truncatingRemainder(dividingBy: step) / 2
+        var y = rect.minY + oy + (oy < 1 ? step : 0)
+        while y < rect.maxY - 0.5 {
+            var x = rect.minX + ox + (ox < 1 ? step : 0)
+            while x < rect.maxX - 0.5 { ctx.fillEllipse(in: CGRect(x: x - r, y: y - r, width: 2 * r, height: 2 * r)); x += step }
+            y += step
+        }
+    }
+
+    /// Cornell notes: a title band, the cue column and the notes ruled across, and the summary at the foot.
+    private static func cornell(_ s: Sheet) {
+        let (rect, ctx, ink, step, hairline) = (s.rect, s.ctx, s.ink, s.step, s.hairline)
+        let summaryTop = rect.maxY - summaryHeight
+        ctx.setStrokeColor(ink.rule.cgColor)
+        ctx.setLineWidth(s.fine)
+        var y = rect.minY + top + step
+        while y < summaryTop - 4 { s.hline(y); y += step }
+        y = summaryTop + step + 6
+        while y < rect.maxY - 24 { s.hline(y, from: rect.minX + 18, to: rect.maxX - 18); y += step }
+        ctx.strokePath()
+        ctx.setStrokeColor(ink.strong.cgColor)
+        ctx.setLineWidth(max(0.8, hairline))
+        s.hline(rect.minY + top)
+        s.hline(summaryTop)
+        s.vline(rect.minX + cueWidth, from: rect.minY + top, to: summaryTop)
+        ctx.strokePath()
+        if hairline < 0.6 {
+            label("Cues", at: CGPoint(x: rect.minX + 18, y: rect.minY + top - 6), ink: ink.label, ctx: ctx)
+            label("Notes", at: CGPoint(x: rect.minX + cueWidth + 14, y: rect.minY + top - 6), ink: ink.label, ctx: ctx)
+            label("Summary", at: CGPoint(x: rect.minX + 18, y: summaryTop + 15), ink: ink.label, ctx: ctx)
+        }
     }
 
     /// A PDF's page filling `rect` (y down), as a viewer shows it: its crop box, turned as the PDF says.
