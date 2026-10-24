@@ -273,7 +273,8 @@ final class DemoLibrary: URLProtocol, @unchecked Sendable {
     static func ask(_ question: String, lecture: String?) -> (Int, String, Data) {
         let answer: String
         let source: [String: Any]
-        if question.lowercased().contains("quiz") || question.contains("JSON") {
+        // Study asks for a lecture's deck in JSON; a student's own question ("What's on Quiz 4?") gets an answer in words.
+        if question.contains("JSON") {
             answer = decks[lecture ?? ""] ?? decks["demo-calc-ibp"]!
             source = ["id": lecture ?? "demo-calc-ibp", "title": lectures.first { $0.id == lecture }?.title ?? "", "class": lectures.first { $0.id == lecture }?.cls ?? "", "date": day(-1), "at": 0, "section": "Key points"]
         } else {
