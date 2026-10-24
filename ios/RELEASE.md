@@ -2,16 +2,21 @@
 
 ## Once
 
-1. **Xcode → Settings → Accounts**: sign in with the Apple ID on the developer team (6K4VZU48G9), as Account Holder
-   or Admin, so Xcode can make the distribution certificate and profiles itself.
-2. **App Store Connect → Apps → +, New App**: iOS, name *Study Stash*, bundle ID `app.studystash.ios` (run
-   `ios/release.sh --local` once first if it isn't in the list yet: that registers it), SKU `studystash-ios`,
-   primary language English (U.S.).
-3. **App Privacy**: the privacy policy URL is `https://study-stash-app.web.app/privacy/`. Data: "Data Not Collected".
+1. **Xcode → Settings → Accounts**: sign in with the Apple ID on the developer team in `project.yml`
+   (`DEVELOPMENT_TEAM`, joey russell G67978NLXW), as Account Holder or Admin, so Xcode can make the distribution
+   certificate and profiles itself. Done on Joey's Mac by 2026-10-23: `app.studystash.ios` and
+   `app.studystash.ios.widgets` are registered on that team, with App Store profiles.
+2. **App Store Connect → Apps → +, New App** (Apple's API can't make this; only the website or Xcode's Distribute
+   window can): iOS, name *Nerd Notes*, primary language English (U.S.), bundle ID `app.studystash.ios`, SKU
+   `nerdnotes-ios`, Full Access. Until it exists an upload stops at "Error Downloading App Information" (the
+   distribution log says `missingApp`).
+3. **TestFlight → Internal Testing → +**: a group (say *Team*) with **automatic distribution** on, and yourself in it.
+   Every build uploaded after that shows in the TestFlight app on your phone by itself.
+4. **App Privacy**: the privacy policy URL is `https://study-stash-app.web.app/privacy/`. Data: "Data Not Collected".
    The app sends what it records and asks only to the student's own library, on their own computer, never to us;
    `PrivacyInfo.xcprivacy` says the same. The AI that writes notes and answers questions runs from that library, under
    the student's own account (or on the computer with Ollama), and the privacy policy says so.
-4. **TestFlight → Test Information** (needed before external testers, not for internal ones):
+5. **TestFlight → Test Information** (needed before external testers, not for internal ones):
    - **Beta App Description**: "Study Stash keeps your lectures. Record a class on your phone, and your computer
      writes study notes from it; read them, study with flashcards and quizzes, ask questions about your lectures,
      see what's due, and write notes by hand in notebooks. This beta has the new look and handwritten notebooks."
