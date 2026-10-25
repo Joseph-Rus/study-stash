@@ -123,7 +123,10 @@ final class Recorder {
                                     file: store.folder.appending(path: r.audio!)) { [weak self] level in
                 Task { @MainActor in self?.heard(level) }
             }
-            node.installTap(onBus: 0, bufferSize: 4096, format: micFormat) { buffer, _ in feeder.feed(buffer) }
+            // @Sendable: the microphone calls this on its own audio thread. Written plainly inside this @MainActor
+            // class, Swift 6 makes it main-actor-only and stops the app on the first buffer (on a phone, never in the
+            // simulator, whose pretend microphone doesn't tap). Feeder is safe on any thread.
+            node.installTap(onBus: 0, bufferSize: 4096, format: micFormat) { @Sendable buffer, _ in feeder.feed(buffer) }
             engine.prepare()
             try engine.start()
 
