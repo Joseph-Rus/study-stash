@@ -18,6 +18,7 @@ struct RecordView: View {
     @State private var confirmingDiscard = false
     @State private var writing: (id: String, title: String)?
     @State private var toast: String?
+    @State private var shooting: PhotoTarget?
     @FocusState private var typing: Bool
 
     var body: some View {
@@ -40,6 +41,7 @@ struct RecordView: View {
                     }
                 }
         }
+        .fullScreenCover(item: $shooting) { BoardCamera(target: $0) }
         .presentationSizing(.page)
         .interactiveDismissDisabled(recorder.phase == .finishing)
         .task {
@@ -88,6 +90,9 @@ struct RecordView: View {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 Button { mark() } label: { Image(icon: "bookmark") }
                     .accessibilityLabel("Mark this moment")
+                    .disabled(recorder.phase == .finishing)
+                Button { shooting = PhotoTarget(lecture: r.id, className: r.className, label: "This recording") } label: { Image(icon: "photo_camera") }
+                    .accessibilityLabel("Take photos of the board")
                     .disabled(recorder.phase == .finishing)
                 Button { writing = (r.id, r.displayTitle) } label: { Image(icon: "edit_note") }
                     .accessibilityLabel("Write by hand")

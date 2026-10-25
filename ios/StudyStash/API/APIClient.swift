@@ -306,6 +306,13 @@ final class APIClient: Sendable {
         return reply.attachments ?? []
     }
 
+    /// A whiteboard photo for a lecture (a phone recording's id, or the laptop's recording-now id).
+    func uploadPhoto(data: Data, name: String, class cls: String?, lecture: String, taken: String) async throws {
+        struct Reply: Decodable { var attachments: [Attachment]? }
+        let _: Reply = try await upload("/attachments", files: [(name, "image/jpeg", data)],
+                                        fields: ["class": cls, "lecture": lecture, "taken": taken, "kind": "whiteboard"])
+    }
+
     // MARK: voice memos
 
     func voiceMemos() async throws -> [VoiceMemo] {
