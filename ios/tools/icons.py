@@ -40,6 +40,7 @@ PHONE_NAMES = {
     "arrow_downward": "arrow-down",           # a notebook: move a page later
     "history": "history",                     # Ask: the chats before
     "edit_square": "square-pen",              # Ask: a new chat
+    "photo_camera": "camera",                 # Whiteboard photos: the camera
 }
 
 
