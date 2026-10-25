@@ -208,7 +208,7 @@ struct PairView: View {
 
     /// Signed in to Google, the laptop not in the folder yet: what to do on the laptop, and waiting for it.
     private var waitForLaptop: some View {
-        let email = app.drive?.email ?? (SetupDebug.page == "laptop" ? "sam.rivera@gmail.com" : "")
+        let email = app.drive?.email ?? (SetupDebug.page == "laptop" ? "sam.rivera@example.com" : "")
         let other = hinted.flatMap { h in h.isEmpty || h.lowercased() == email.lowercased() ? nil : h }
         return SetupScreen(title: "Now connect your laptop",
                            lede: "On your laptop, open Study Stash, then Settings, then Phone, and choose Connect with Google. Use the same account as here.") {

@@ -127,7 +127,7 @@ struct FakeLaptop {
                                        copyEvery: .seconds(10), openEvery: .seconds(60), watchEvery: .seconds(3))
 
     func link() -> DriveLink {
-        let l = DriveLink(drive: drive, account: "sam@gmail.com", folder: folder, phoneName: "Sam's iPhone", phoneModel: "iPhone", timing: Self.fast)
+        let l = DriveLink(drive: drive, account: "sam@example.com", folder: folder, phoneName: "Sam's iPhone", phoneModel: "iPhone", timing: Self.fast)
         DriveLibrary.link = l
         return l
     }
