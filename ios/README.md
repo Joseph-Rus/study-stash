@@ -29,7 +29,8 @@ In the simulator there's no camera. A debug build takes launch arguments instead
 - `-pair <address> <code>` pairs on launch
 - `-tab due|ask|settings|search` opens a tab
 - `-open lecture:<id>` or `-open class:<name>` opens a screen
-- `-ask "<question>"` asks it on the Ask tab
+- `-ask "<question>"` asks it on the Ask tab; `-ask-drive`, `-ask-pace slow`, `-ask-fail`, `-ask-waiting`, `-ask-chats`
+  and `-ask-typing "<text>"` show Ask's other states with the sample classes (DESIGN.md lists them)
 - `-drive-token-file <path> -drive-space <prefix>` connects over Google Drive with a test account's token (a JSON with
   `client_id`, `client_secret`, `token_uri`, `refresh_token`), every file in the folder named `<prefix>…`; no one
   presses Allow. Never a real student's account, and delete the prefix's files after.

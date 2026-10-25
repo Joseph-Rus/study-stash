@@ -157,7 +157,8 @@ enum Lift {
     case today
     /// What floats: the Ask bar, a menu, a toast, the recorder.
     case float
-    /// The same, ringed in ink: the Ask bar with the caret in it.
+    /// The same, ringed in ink. (Not the Ask bar: it keeps its hairline with the caret in it, as a ring of the light
+    /// ink read as a bright white border in dark.)
     case floatFocus
 }
 

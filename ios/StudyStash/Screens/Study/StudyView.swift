@@ -250,6 +250,7 @@ struct StudyView: View {
                 case .answer(let t): text = t
                 case .done(let r): if !r.answer.isEmpty { text = r.answer }
                 case .error(_, let d): problem = d
+                case .chat: break
                 }
             }
         } catch {

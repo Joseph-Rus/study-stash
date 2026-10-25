@@ -221,7 +221,9 @@ Button { } label: { row }.buttonStyle(.row)           // a whole row, washed whi
 RecordButton(state: .idle) { start() }                // .recording / .paused, words:, elapsed:, levels:, stop:
 RecordDot(state: .recording, mini: true)
 LevelBars(levels: recorder.levels)                    // three red bars
-AskBar(placeholder: "Ask anything about your notes", text: $q, scope: "All notes") { send() }
+AskBar(placeholder: "Ask anything about your notes", text: $q, scope: "All notes", busy: answering,
+       onStop: { stop() }) { send() }                 // empties itself when sent; Send is Stop while answering
+MarkdownText(answer, style: .lede, caret: writing)    // an AI's Markdown in the look; a caret while it's written
 AskBarButton(placeholder: "Ask about this lecture", scope: "This lecture") { asking = true }
 EmptyText("No lectures yet. Record one here, or attach a recording.")
 EmptyState(title: "Can't reach your library", detail: "…", actionTitle: "Try again") { }   // replaces ContentUnavailableView
@@ -346,7 +348,11 @@ one) and `-quiet` (no notification prompt):
   `ask:class:<name>`, `add-files`, `import-audio`, `goodnotes`, `handwriting` (a new notebook each time), `notebook`,
   `study:<id>`, `quiz:<id>`, `uses`, `widgets` (`WidgetGallery`, in `Shared/WidgetGallery.swift`), `components:1…4`
   (every shared piece)
-- `-ask "<question>"` with `-tab ask`; `-unpaired` (setup, no `-demo`), with `-pair-code` its second step, or
+- `-ask "<question>"` with `-tab ask` (`-ask-new` starts with nothing asked); for Ask's states, `-ask-waiting` (it
+  stays asking: `-ask-stage reading|writing` for its later stages), `-ask-drive` (the words, and the demo's pace, as
+  over Google Drive), `-ask-pace slow` (a word at a time, to Stop), `-ask-fail` (no answer: the link's words, Try
+  again), `-ask-chats` (Chats open), `-ask-open <chat id>` (a kept chat open: the demo's `demo-chat-chem`, `demo-chat-ibp`…), `-ask-typing "<text>"` (typed in the bar, the keyboard up), `-ask-scopes`;
+  `-unpaired` (setup, no `-demo`), with `-pair-code` its second step, or
   `-pair-page others|laptop|connect|finding|connecting|camera-off|address|cant-reach|code|typing|wrong|uses|done` any
   page of it (`others` is Other ways, `laptop` is "Now connect your laptop" after Continue with Google);
   `-pair-scan '<scanned text>'` goes through setup as if that was scanned (the demo library's address,

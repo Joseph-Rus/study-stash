@@ -574,10 +574,14 @@ struct LevelBars: View {
 
 // MARK: - Ask
 
-/// Ask: a bar floating on its shadow at the foot of a page, the panel's corners; ringed in ink with the caret in it.
-/// The question grows to five lines; the scope ("All notes ⌄") and the round ink send button sit at its end (on a
-/// phone, the scope under the question, so the placeholder has the width). The placeholder is the desktop's: "Ask
-/// anything about your notes", "Ask about Machine Learning", "Ask about this lecture".
+/// Ask: a bar floating on its shadow at the foot of a page, the panel's corners, a hairline round it (focused too: no
+/// bright ring in dark). The question grows to six lines; the scope ("All notes ⌄") and the round send button sit at
+/// its end (on a phone, the scope under the question, so the placeholder has the width). The placeholder is the
+/// desktop's: "Ask anything about your notes", "Ask about Machine Learning", "Ask about this lecture".
+///
+/// Send (or Return) hands the question to `onSend` and empties the field; while an answer is being written the same
+/// button is Stop (`onStop`). Send is the desktop's: an ink circle with the arrow in the page's colour, grey while
+/// there's nothing to send.
 struct AskBar: View {
     var placeholder: String
     @Binding var text: String
@@ -585,9 +589,15 @@ struct AskBar: View {
     var scope: String?
     var busy = false
     var onScope: (() -> Void)?
+    var onStop: (() -> Void)?
+    /// Puts the caret in it when it appears.
+    var focusOnAppear = false
+    var onFocus: ((Bool) -> Void)?
     var onSend: () -> Void
     @FocusState private var focused: Bool
+    @State private var fieldID = UUID()
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @ScaledMetric(relativeTo: .body) private var sendSize: CGFloat = 36
 
     private var empty: Bool { text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
@@ -597,7 +607,7 @@ struct AskBar: View {
             HStack(alignment: .bottom, spacing: 8) {
                 field
                 if !compact, let scope { scopeButton(scope).padding(.bottom, 9) }
-                if !(compact && scope != nil) { send.padding(.bottom, 9) }
+                if !(compact && scope != nil) { send.padding(.bottom, 8) }
             }
             if compact, let scope {
                 HStack {
@@ -606,25 +616,43 @@ struct AskBar: View {
                     send
                 }
                 .padding(.leading, 18)
-                .padding(.bottom, 9)
+                .padding(.bottom, 8)
                 .padding(.top, -6)
             }
         }
-        .padding(.trailing, 9)
+        .padding(.trailing, 8)
         .frame(minHeight: 52)
         .background(.surface, in: .rect(cornerRadius: Radius.panel))
-        .lifted(focused ? .floatFocus : .float, in: RoundedRectangle(cornerRadius: Radius.panel))
+        .lifted(.float, in: RoundedRectangle(cornerRadius: Radius.panel))
+        .contentShape(.rect(cornerRadius: Radius.panel))
+        .onTapGesture { focused = true }
+        .onAppear {
+            guard focusOnAppear else { return }
+            Task { try? await Task.sleep(for: .milliseconds(400)); focused = true }
+        }
+        .onChange(of: focused) { _, now in onFocus?(now) }
     }
 
     private var field: some View {
-        TextField("", text: $text, prompt: Text(placeholder).foregroundStyle(.inkMuted), axis: .vertical)
+        TextField("", text: $text, prompt: Text(placeholder).foregroundStyle(.inkSubtle), axis: .vertical)
             .textStyle(.lede)
             .foregroundStyle(.ink)
-            .lineLimit(1...5)
+            .tint(.ink)
+            .lineLimit(1...6)
             .focused($focused)
+            .id(fieldID)
             .submitLabel(.send)
-            .onSubmit(onSend)
+            .onSubmit(submit)
+            .onChange(of: text) { _, new in
+                // Return sends, as the desktop's Enter does (a vertical field puts a line break in instead); a
+                // question pasted on several lines becomes one, as the desktop's does.
+                guard new.contains(where: \.isNewline) else { return }
+                let returned = new.last?.isNewline == true
+                text = new.split(whereSeparator: \.isNewline).joined(separator: " ")
+                if returned { submit() }
+            }
             .accessibilityIdentifier("ask.field")
+            .accessibilityLabel(placeholder)
             .padding(.vertical, 14)
             .padding(.leading, 18)
             .layoutPriority(1)
@@ -633,20 +661,56 @@ struct AskBar: View {
     private func scopeButton(_ scope: String) -> some View {
         Button { onScope?() } label: { PickerLabel(scope) }
             .buttonStyle(AskScopeStyle())
+            .accessibilityLabel("Asking about \(scope)")
+            .accessibilityHint("Changes what it asks about")
+    }
+
+    /// Sends what's typed, and empties the field: a new field at once (what the keyboard was still holding, a
+    /// suggestion or dictation, would otherwise bring the question back), and a look a moment later.
+    private func submit() {
+        guard !busy, !empty else { return }
+        let sent = text
+        let typing = focused
+        onSend()
+        text = ""
+        // A new field: whatever the keyboard was holding goes with the old one. The caret stays.
+        fieldID = UUID()
+        if typing { focused = true }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(250))
+            if text == sent || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { text = "" }
+        }
     }
 
     private var send: some View {
-        Button(action: onSend) {
-            Icon(busy ? "more_horiz" : "arrow_upward", size: 18)
-                .foregroundStyle(.surface)
-                .frame(width: 34, height: 34)
-                .background(.ink, in: .circle)
+        let on = busy || !empty
+        return Button {
+            if busy { onStop?() } else { submit() }
+        } label: {
+            ZStack {
+                Circle().fill(on ? Color.ink : .surfaceSunken)
+                if !on { Circle().strokeBorder(.line) }
+                if busy {
+                    Icon("stop", size: 14, filled: true)
+                } else {
+                    Icon("arrow_upward", size: 19)
+                }
+            }
+            .foregroundStyle(on ? Color.surface : .inkSubtle)
+            .frame(width: sendSize, height: sendSize)
+            .contentShape(.circle)
         }
-        .buttonStyle(.plain)
-        .disabled(busy || empty)
-        .opacity(busy || empty ? 0.35 : 1)
-        .accessibilityLabel("Ask")
-        .accessibilityIdentifier("ask.send")
+        .buttonStyle(SendStyle())
+        .disabled(!on || (busy && onStop == nil))
+        .accessibilityLabel(busy ? "Stop the answer" : "Send question")
+        .accessibilityIdentifier(busy ? "ask.stop" : "ask.send")
+    }
+}
+
+/// Send and Stop: pressed, a touch lighter.
+private struct SendStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label.opacity(configuration.isPressed ? 0.8 : 1)
     }
 }
 

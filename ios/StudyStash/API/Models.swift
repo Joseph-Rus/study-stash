@@ -157,26 +157,32 @@ struct AskReply: Codable, Sendable {
     var engineName: String
     var fellBack: Bool
     var why: String
+    /// The kept chat this turn is in now (a new one's id when the question started one); nil from a library too old to
+    /// keep chats, or when none was asked for.
+    var chat: String?
 
     enum CodingKeys: String, CodingKey {
-        case answer, sources, why
+        case answer, sources, why, chat
         case engineName = "engine_name"
         case fellBack = "fell_back"
     }
 }
 
-/// What POST /api/v2/ai/ask with stream: true sends, one per line.
+/// What POST /api/v2/ai/ask with stream: true sends, one per line: the kept chat it's in first (when one was asked
+/// for), then the answer as it's written, then the whole reply.
 enum AskEvent: Decodable, Sendable {
+    case chat(String)
     case text(String)
     case answer(String)
     case done(AskReply)
     case error(status: Int, detail: String)
 
-    enum CodingKeys: String, CodingKey { case kind, text, reply, status, detail }
+    enum CodingKeys: String, CodingKey { case kind, text, reply, status, detail, id }
 
     init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         switch try c.decode(String.self, forKey: .kind) {
+        case "chat": self = .chat(try c.decode(String.self, forKey: .id))
         case "text": self = .text(try c.decode(String.self, forKey: .text))
         case "answer": self = .answer(try c.decode(String.self, forKey: .text))
         case "done": self = .done(try c.decode(AskReply.self, forKey: .reply))
@@ -187,13 +193,39 @@ enum AskEvent: Decodable, Sendable {
     }
 }
 
-/// A chat in the list.
+/// Where an Ask chat is kept and listed, as the desktop has it: Home (the Ask tab), a class's page or a lecture's.
+struct AskPlace: Codable, Sendable, Hashable {
+    /// "home", "class" or "lecture".
+    var scope: String
+    var lecture: String?
+    var `class`: String?
+
+    static let home = AskPlace(scope: "home")
+}
+
+/// One earlier question and its answer, sent with a follow-up to a library that doesn't keep the chat itself.
+struct AskHistoryTurn: Codable, Sendable {
+    var question: String
+    var answer: String
+    var sources: [AskSource]
+}
+
+/// A chat in the list (GET /api/v2/chats): the library's own chats and the Ask ones (`kind` "ask"), newest first.
 struct ChatSummary: Codable, Sendable, Hashable, Identifiable {
     var id: String
     var title: String
     var `class`: String
     var lecture: String
     var updated: String
+    /// "ask" for a conversation from Ask (the app's, the phone's); "" for the library's own chats. Nil from a library
+    /// too old to say, which has no Ask chats.
+    var kind: String?
+    /// Where an Ask chat was started: "home", "class" or "lecture".
+    var scope: String?
+    /// How many questions it holds.
+    var turns: Int?
+
+    var isAsk: Bool { kind == "ask" }
 }
 
 struct ChatMessage: Codable, Sendable, Hashable {
@@ -202,6 +234,15 @@ struct ChatMessage: Codable, Sendable, Hashable {
     var when: String
     var tools: [String]?
     var failed: Bool?
+    /// An Ask answer's sources, the AI that wrote it, and whether it was stopped partway.
+    var sources: [AskSource]?
+    var engineName: String?
+    var stopped: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case role, text, when, tools, failed, sources, stopped
+        case engineName = "engine_name"
+    }
 }
 
 /// GET /api/v2/chats/{id}.
@@ -211,6 +252,8 @@ struct Chat: Codable, Sendable {
     var `class`: String
     var lecture: String
     var updated: String
+    var kind: String?
+    var scope: String?
     var messages: [ChatMessage]
 }
 
