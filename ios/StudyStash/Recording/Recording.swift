@@ -57,10 +57,11 @@ struct Recording: Codable, Identifiable, Hashable, Sendable {
         return s >= 3600 ? String(format: "%d:%02d:%02d", s / 3600, (s % 3600) / 60, s % 60) : String(format: "%02d:%02d", s / 60, s % 60)
     }
 
+    /// Its title, or until it has one the desktop's working title: "Calculus II, Fri 16 Oct", or with no class
+    /// "Recording, Fri 16 Oct at 9:41 AM".
     var displayTitle: String {
         if !title.isEmpty { return title }
-        let day = started.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated))
-        return className.map { "\($0), \(day)" } ?? "Recording, \(day) at \(started.formatted(date: .omitted, time: .shortened))"
+        return Nouns.untitled(folder: className, date: Self.localISO(started))
     }
 
     /// What POST /api/v2/lectures takes.
@@ -132,6 +133,7 @@ final class RecordingStore {
         recordings.removeAll { $0.id == r.id }
         try? FileManager.default.removeItem(at: folder.appending(path: "\(r.id).json"))
         if let a = audioURL(r) { try? FileManager.default.removeItem(at: a) }
+        if r.state != .sent { PhotoStore.shared.discard(lecture: r.id) }
     }
 
     /// Send one to the library. Nothing said means nothing to send: it's kept, and says so.
@@ -162,11 +164,14 @@ final class RecordingStore {
             r.error = nil
         }
         save(r)
+        // The whiteboard photos taken during it go once the lecture is there.
+        if r.state == .sent { await PhotoStore.shared.sendWaiting(api: api) }
     }
 
     /// Everything waiting, sent now (when the app comes back, or the library can be reached again).
     func sendWaiting(api: APIClient) async {
         for r in recordings where r.state == .waiting { await send(r.id, api: api) }
+        await PhotoStore.shared.sendWaiting(api: api)
     }
 }
 

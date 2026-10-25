@@ -12,6 +12,13 @@ struct APIError: Error, LocalizedError, Sendable, Equatable {
 
     static let unreachableLibrary = APIError(status: 0, detail: "Can't reach your library. Is Tailscale on, and your computer awake?")
 
+    /// Why the library couldn't be asked: over Google Drive, the words `DriveLibrary` gave ("Your laptop isn't
+    /// answering…"); otherwise Tailscale's.
+    static func unreachable(_ error: any Error) -> APIError {
+        let e = error as NSError
+        return e.domain == DriveLibrary.errorDomain ? APIError(status: 0, detail: e.localizedDescription) : .unreachableLibrary
+    }
+
     static func words(for status: Int) -> String {
         switch status {
         case 401: "This phone needs pairing with your library again."
@@ -63,7 +70,7 @@ final class APIClient: Sendable {
         } catch let e as URLError where e.code == .cancelled {
             throw CancellationError()
         } catch {
-            throw APIError.unreachableLibrary
+            throw APIError.unreachable(error)
         }
         guard let http = response as? HTTPURLResponse else { throw APIError.unreachableLibrary }
         guard (200..<300).contains(http.statusCode) else { throw failure(http.statusCode, data) }
@@ -110,8 +117,12 @@ final class APIClient: Sendable {
         let bytes: URLSession.AsyncBytes, response: URLResponse
         do {
             (bytes, response) = try await session.bytes(for: req)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let e as URLError where e.code == .cancelled {
+            throw CancellationError()
         } catch {
-            throw APIError.unreachableLibrary
+            throw APIError.unreachable(error)
         }
         guard let http = response as? HTTPURLResponse else { throw APIError.unreachableLibrary }
         guard (200..<300).contains(http.statusCode) else {
@@ -200,12 +211,63 @@ final class APIClient: Sendable {
         try await get("/search", query: ["q": q, "class": cls, "limit": limit.map(String.init)])
     }
 
+    // MARK: changing a lecture (the desktop's Move to, Rename, Delete with Undo, Write the notes again)
+
+    /// File a lecture in another class ("Unsorted" for none). The lecture as it is now.
+    func move(lecture id: String, to cls: String) async throws -> Lecture {
+        struct Body: Encodable { var `class`: String }
+        return try await post("/lectures/\(Self.segment(id))/class", Body(class: cls))
+    }
+
+    /// A title of the student's own, kept whatever writes its notes again. The lecture as it is now. 409 while the
+    /// library is still writing its notes (the library's words say so).
+    func rename(lecture id: String, title: String) async throws -> Lecture {
+        struct Body: Encodable { var title: String }
+        return try await post("/lectures/\(Self.segment(id))/title", Body(title: title))
+    }
+
+    /// Delete a lecture: it waits in the library's trash for `restore` (Undo) for the minutes this returns.
+    @discardableResult
+    func delete(lecture id: String) async throws -> Int {
+        struct Reply: Decodable { var undo_minutes: Int? }
+        let (data, _) = try await send(request("DELETE", "/lectures/\(Self.segment(id))"))
+        return (try? Self.decoder.decode(Reply.self, from: data))?.undo_minutes ?? 10
+    }
+
+    /// Undo a delete, while it's still in the trash.
+    func restore(lecture id: String) async throws {
+        struct Empty: Encodable {}
+        struct Any_: Decodable {}
+        let _: Any_ = try await post("/lectures/\(Self.segment(id))/restore", Empty())
+    }
+
+    /// Write a lecture's notes again (after they failed): it's queued, and its status says how it goes.
+    func rewrite(lecture id: String) async throws {
+        struct Empty: Encodable {}
+        struct Any_: Decodable {}
+        let _: Any_ = try await post("/lectures/\(Self.segment(id))/rewrite", Empty())
+    }
+
     // MARK: asking
 
-    struct AskBody: Encodable { var question: String; var lecture: String?; var `class`: String?; var stream = true }
+    struct AskBody: Encodable {
+        var question: String
+        var lecture: String?
+        var `class`: String?
+        var stream = true
+        /// The kept chat it goes on ("new" starts one where `place` says); nil keeps nothing.
+        var chat: String?
+        var place: AskPlace?
+        /// The conversation so far, for a library that doesn't keep it (one that does reads it from the chat).
+        var history: [AskHistoryTurn]?
+    }
 
-    func ask(_ question: String, lecture: String? = nil, class cls: String? = nil) async throws -> AsyncThrowingStream<AskEvent, Error> {
-        try await lines("/ai/ask", AskBody(question: question, lecture: lecture, class: cls), as: AskEvent.self)
+    /// Ask the library's AI, the answer streamed. `chat`: the kept conversation this goes on ("new" for a new one at
+    /// `place`); `history`: the turns before it, for a library too old to keep chats (it ignores what it doesn't know).
+    func ask(_ question: String, lecture: String? = nil, class cls: String? = nil, chat: String? = nil, place: AskPlace? = nil,
+             history: [AskHistoryTurn]? = nil) async throws -> AsyncThrowingStream<AskEvent, Error> {
+        try await lines("/ai/ask", AskBody(question: question, lecture: lecture, class: cls, chat: chat, place: place, history: history),
+                        as: AskEvent.self)
     }
 
     /// Let the engine that will answer get ready while the question is typed.
@@ -216,8 +278,22 @@ final class APIClient: Sendable {
     }
 
     func chats() async throws -> [ChatSummary] { try await get("/chats") }
+
+    /// The Ask conversations the library keeps (the phone's, and those asked on the computer), newest first. From
+    /// `GET /chats` as it is (over Google Drive, the copy on the phone answers it at once), Ask's own picked out.
+    func askChats() async throws -> [ChatSummary] { try await chats().filter(\.isAsk) }
     func chat(_ id: String) async throws -> Chat { try await get("/chats/\(Self.segment(id))") }
     func deleteChat(_ id: String) async throws { try await delete("/chats/\(Self.segment(id))") }
+
+    /// A deleted chat back (Undo), while the library still keeps it.
+    func restoreChat(_ id: String) async throws {
+        struct Empty: Encodable {}
+        struct Any_: Decodable {}
+        let _: Any_ = try await post("/chats/\(Self.segment(id))/restore", Empty())
+    }
+
+    /// Which AI does each job (Ask's is the one answering here).
+    func aiSettings() async throws -> AISettings { try await get("/ai") }
 
     struct ChatBody: Encodable { var message: String; var chat: String?; var `class`: String?; var lecture: String?; var edit = false }
 
@@ -260,6 +336,13 @@ final class APIClient: Sendable {
         struct Reply: Decodable { var attachments: [Attachment]? }
         let reply: Reply = try await upload("/attachments", files: files, fields: ["class": cls, "lecture": lecture])
         return reply.attachments ?? []
+    }
+
+    /// A whiteboard photo for a lecture (a phone recording's id, or the laptop's recording-now id).
+    func uploadPhoto(data: Data, name: String, class cls: String?, lecture: String, taken: String) async throws {
+        struct Reply: Decodable { var attachments: [Attachment]? }
+        let _: Reply = try await upload("/attachments", files: [(name, "image/jpeg", data)],
+                                        fields: ["class": cls, "lecture": lecture, "taken": taken, "kind": "whiteboard"])
     }
 
     // MARK: voice memos

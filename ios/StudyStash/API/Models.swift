@@ -22,12 +22,16 @@ struct Device: Codable, Sendable, Hashable, Identifiable {
     var lastSeen: String?
 }
 
-/// One class. `color` is the class's place in the library: its dot's colour.
+/// One class (a folder). `color` is the class's place in the library, which picks its highlighter
+/// (`Highlighter(classIndex:)`, the same as the desktop's).
 struct ClassInfo: Codable, Sendable, Hashable, Identifiable {
     var name: String
     var lectures: Int
     var color: Int
     var description: String?
+    /// The sidebar group it's in on the computer: "" for Classes, else "Clubs", "Work" or one of the student's own
+    /// (its notes are meetings there). Nil from a library before groups.
+    var group: String?
     /// The linked Canvas course's short code ("CSCI 321"), "" when there's none.
     var code: String?
     var aliases: [String]?
@@ -47,12 +51,23 @@ struct LibraryOverview: Codable, Sendable {
     /// What it's for ("student", "work", ...); empty until asked, nil from a library before it was asked.
     var uses: [String]?
     var forSchool: Bool?
+    /// The laptop is recording a lecture now (nil when it isn't, or from a library before photos).
+    var recordingNow: RecordingNow?
 
     enum CodingKeys: String, CodingKey {
         case name, version, classes, unsorted, writing, ask, uses
+        case recordingNow = "recording_now"
         case notesModel = "notes_model"
         case forSchool = "for_school"
     }
+}
+
+/// A lecture the laptop is recording right now: its id, class, title, and when it started (ISO 8601 with offset).
+struct RecordingNow: Codable, Sendable, Hashable {
+    var id: String
+    var `class`: String?
+    var title: String?
+    var started: String
 }
 
 /// One lecture in a list.
@@ -90,13 +105,15 @@ struct Lecture: Codable, Sendable {
     var summary: String
     var topics: [String]
     var notes: String
+    /// What the student typed while it recorded, as they typed it (the notes mark those lines ==like this==).
+    var typed: String?
     var transcript: String
     var error: String?
     /// That reason in a sentence, when no notes will be written ("This lecture is too short for notes…").
     var noNotesWhy: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, title, `class`, date, seconds, owner, status, summary, topics, notes, transcript, error
+        case id, title, `class`, date, seconds, owner, status, summary, topics, notes, typed, transcript, error
         case noNotesWhy = "no_notes_why"
     }
 
@@ -148,29 +165,37 @@ struct AskSource: Codable, Sendable, Hashable {
 struct AskReply: Codable, Sendable {
     var answer: String
     var sources: [AskSource]
+    /// The AI that wrote it, by the library's id ("claude", "codex", "gemini", "ollama").
+    var engine: String?
     var engineName: String
     var fellBack: Bool
     var why: String
+    /// The kept chat this turn is in now (a new one's id when the question started one); nil from a library too old to
+    /// keep chats, or when none was asked for.
+    var chat: String?
 
     enum CodingKeys: String, CodingKey {
-        case answer, sources, why
+        case answer, sources, why, chat, engine
         case engineName = "engine_name"
         case fellBack = "fell_back"
     }
 }
 
-/// What POST /api/v2/ai/ask with stream: true sends, one per line.
+/// What POST /api/v2/ai/ask with stream: true sends, one per line: the kept chat it's in first (when one was asked
+/// for), then the answer as it's written, then the whole reply.
 enum AskEvent: Decodable, Sendable {
+    case chat(String)
     case text(String)
     case answer(String)
     case done(AskReply)
     case error(status: Int, detail: String)
 
-    enum CodingKeys: String, CodingKey { case kind, text, reply, status, detail }
+    enum CodingKeys: String, CodingKey { case kind, text, reply, status, detail, id }
 
     init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         switch try c.decode(String.self, forKey: .kind) {
+        case "chat": self = .chat(try c.decode(String.self, forKey: .id))
         case "text": self = .text(try c.decode(String.self, forKey: .text))
         case "answer": self = .answer(try c.decode(String.self, forKey: .text))
         case "done": self = .done(try c.decode(AskReply.self, forKey: .reply))
@@ -181,13 +206,39 @@ enum AskEvent: Decodable, Sendable {
     }
 }
 
-/// A chat in the list.
+/// Where an Ask chat is kept and listed, as the desktop has it: Home (the Ask tab), a class's page or a lecture's.
+struct AskPlace: Codable, Sendable, Hashable {
+    /// "home", "class" or "lecture".
+    var scope: String
+    var lecture: String?
+    var `class`: String?
+
+    static let home = AskPlace(scope: "home")
+}
+
+/// One earlier question and its answer, sent with a follow-up to a library that doesn't keep the chat itself.
+struct AskHistoryTurn: Codable, Sendable {
+    var question: String
+    var answer: String
+    var sources: [AskSource]
+}
+
+/// A chat in the list (GET /api/v2/chats): the library's own chats and the Ask ones (`kind` "ask"), newest first.
 struct ChatSummary: Codable, Sendable, Hashable, Identifiable {
     var id: String
     var title: String
     var `class`: String
     var lecture: String
     var updated: String
+    /// "ask" for a conversation from Ask (the app's, the phone's); "" for the library's own chats. Nil from a library
+    /// too old to say, which has no Ask chats.
+    var kind: String?
+    /// Where an Ask chat was started: "home", "class" or "lecture".
+    var scope: String?
+    /// How many questions it holds.
+    var turns: Int?
+
+    var isAsk: Bool { kind == "ask" }
 }
 
 struct ChatMessage: Codable, Sendable, Hashable {
@@ -196,6 +247,16 @@ struct ChatMessage: Codable, Sendable, Hashable {
     var when: String
     var tools: [String]?
     var failed: Bool?
+    /// An Ask answer's sources, the AI that wrote it, and whether it was stopped partway.
+    var sources: [AskSource]?
+    var engine: String?
+    var engineName: String?
+    var stopped: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case role, text, when, tools, failed, sources, stopped, engine
+        case engineName = "engine_name"
+    }
 }
 
 /// GET /api/v2/chats/{id}.
@@ -205,6 +266,8 @@ struct Chat: Codable, Sendable {
     var `class`: String
     var lecture: String
     var updated: String
+    var kind: String?
+    var scope: String?
     var messages: [ChatMessage]
 }
 
@@ -214,6 +277,14 @@ struct ChatEvent: Codable, Sendable {
     var kind: String?
     var text: String?
     var name: String?
+}
+
+/// GET /api/v2/ai: which AI does each job. Only Ask's is read here (`jobs.ask.provider`); it holds no secrets.
+struct AISettings: Decodable, Sendable {
+    struct Job: Decodable, Sendable { var provider: String }
+    /// The library's AI, when a job has none of its own.
+    var provider: String?
+    var jobs: [String: Job]?
 }
 
 /// One assignment on the Due list. `due` is local time without an offset.
@@ -327,6 +398,13 @@ struct Attachment: Codable, Sendable, Hashable, Identifiable {
     var hasText: Bool
     /// Still being read: show "Reading your handwriting…" and keep asking.
     var reading: Bool
+    /// A whiteboard photo: when it was taken, and the second of the lecture it was (the library works that out).
+    var taken: String?
+    var at: Double?
+    /// "whiteboard" for a photo taken during the lecture.
+    var kind: String?
+
+    var isWhiteboard: Bool { kind == "whiteboard" }
 }
 
 /// A recording sent from the phone: waiting for a computer, being written down there, done, or failed.

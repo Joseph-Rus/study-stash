@@ -1,134 +1,218 @@
 import SwiftUI
+import UIKit
 
-/// A colour in OKLCH (lightness 0–1, chroma, hue in degrees), the space the Mac app's themes are defined in.
-struct OKLCH: Hashable, Sendable {
-    var l: Double, c: Double, h: Double
+// The Semester look's tokens: the desktop's (engine/src/StudyStash.App/Skin.cs, `Palette`, light and dark), by the same
+// names, so a colour here is the colour there. Black, grey and white; a class's highlighter; and two reds, one for
+// recording and one for late. There is no accent: the app's tint is ink. Also compiled into the widget extension.
 
-    /// The sRGB colour, clipped into gamut.
-    var rgb: (r: Double, g: Double, b: Double) {
-        let hr = h * .pi / 180
-        let a = c * cos(hr), b = c * sin(hr)
-        let l_ = l + 0.3963377774 * a + 0.2158037573 * b
-        let m_ = l - 0.1055613458 * a - 0.0638541728 * b
-        let s_ = l - 0.0894841775 * a - 1.2914855480 * b
-        let L = l_ * l_ * l_, M = m_ * m_ * m_, S = s_ * s_ * s_
-        let lin = (
-            4.0767416621 * L - 3.3077115913 * M + 0.2309699292 * S,
-            -1.2684380046 * L + 2.6097574011 * M - 0.3413193965 * S,
-            -0.0041960863 * L - 0.7034186147 * M + 1.7076147010 * S
-        )
-        func gamma(_ x: Double) -> Double {
-            let v = x <= 0.0031308 ? 12.92 * x : 1.055 * pow(x, 1 / 2.4) - 0.055
-            return min(1, max(0, v))
-        }
-        return (gamma(lin.0), gamma(lin.1), gamma(lin.2))
-    }
-
-    var color: Color {
-        let (r, g, b) = rgb
-        return Color(.sRGB, red: r, green: g, blue: b)
+extension Color {
+    /// A colour that's one thing in light and another in dark ("#rrggbb", or with alpha "#rrggbbaa").
+    init(light: String, dark: String) {
+        self.init(uiColor: UIColor(light: light, dark: dark))
     }
 }
 
-/// One of the Mac app's twenty colour themes (ColourThemes.cs): the accent's hue, chroma and lightness.
-struct ColourTheme: Hashable, Sendable, Identifiable {
-    var name: String
-    var h: Double, c: Double, l: Double
-    var id: String { name }
-
-    /// A light accent (Chalkboard, Highlighter, Lilac, Peach, Mint): text on it is dark ink.
-    var isLight: Bool { l >= 0.75 }
-
-    /// The accent, a touch lighter in the dark the way the Mac's dark tokens are.
-    var accent: Color {
-        Color(UIColor { traits in
-            let dark = traits.userInterfaceStyle == .dark
-            let o = OKLCH(l: dark && !isLight ? min(l + 0.08, 0.72) : l, c: c, h: h)
-            let (r, g, b) = o.rgb
-            return UIColor(red: r, green: g, blue: b, alpha: 1)
-        })
+extension UIColor {
+    convenience init(light: String, dark: String) {
+        let l = UIColor(hex: light), d = UIColor(hex: dark)
+        self.init { $0.userInterfaceStyle == .dark ? d : l }
     }
 
-    static let all: [ColourTheme] = [
-        .init(name: "Lagoon", h: 195, c: 0.12, l: 0.58),
-        .init(name: "Library", h: 160, c: 0.1, l: 0.5),
-        .init(name: "Blueprint", h: 262, c: 0.19, l: 0.55),
-        .init(name: "Marmalade", h: 50, c: 0.17, l: 0.64),
-        .init(name: "Plum", h: 330, c: 0.14, l: 0.52),
-        .init(name: "Chalkboard", h: 95, c: 0.14, l: 0.84),
-        .init(name: "Highlighter", h: 125, c: 0.21, l: 0.86),
-        .init(name: "Terracotta", h: 35, c: 0.13, l: 0.58),
-        .init(name: "Graphite", h: 260, c: 0.01, l: 0.42),
-        .init(name: "Original red", h: 22, c: 0.19, l: 0.6),
-        .init(name: "Sky", h: 235, c: 0.13, l: 0.62),
-        .init(name: "Midnight", h: 275, c: 0.13, l: 0.42),
-        .init(name: "Violet", h: 295, c: 0.17, l: 0.55),
-        .init(name: "Lilac", h: 300, c: 0.1, l: 0.82),
-        .init(name: "Bubblegum", h: 355, c: 0.17, l: 0.64),
-        .init(name: "Peach", h: 55, c: 0.1, l: 0.84),
-        .init(name: "Mocha", h: 55, c: 0.07, l: 0.47),
-        .init(name: "Moss", h: 115, c: 0.11, l: 0.56),
-        .init(name: "Clover", h: 148, c: 0.16, l: 0.6),
-        .init(name: "Mint", h: 165, c: 0.11, l: 0.87),
-    ]
-
-    static let lagoon = all[0]
-
-    /// The theme with this name (any case), or Lagoon.
-    static func named(_ name: String?) -> ColourTheme {
-        let n = (name ?? "").trimmingCharacters(in: .whitespaces).lowercased()
-        return all.first { $0.name.lowercased() == n } ?? lagoon
+    /// "#rrggbb" or "#rrggbbaa".
+    convenience init(hex: String) {
+        let s = hex.hasPrefix("#") ? String(hex.dropFirst()) : hex
+        let v = UInt64(s, radix: 16) ?? 0
+        let a = s.count == 8 ? CGFloat(v & 0xff) / 255 : 1
+        let rgb = s.count == 8 ? v >> 8 : v
+        self.init(red: CGFloat(rgb >> 16 & 0xff) / 255, green: CGFloat(rgb >> 8 & 0xff) / 255, blue: CGFloat(rgb & 0xff) / 255, alpha: a)
     }
 }
 
-/// Each class's dot, from its place in the library (ClassColors.Palette on the Mac).
-enum ClassColor {
-    static let palette: [OKLCH] = [
-        .init(l: 0.62, c: 0.14, h: 250),
-        .init(l: 0.64, c: 0.14, h: 155),
-        .init(l: 0.6, c: 0.14, h: 295),
-        .init(l: 0.7, c: 0.13, h: 70),
-        .init(l: 0.63, c: 0.14, h: 20),
-        .init(l: 0.66, c: 0.12, h: 200),
-        .init(l: 0.62, c: 0.14, h: 330),
-        .init(l: 0.66, c: 0.13, h: 120),
-    ]
-
-    static func of(_ index: Int?) -> Color {
-        guard let index else { return .secondary }
-        let n = palette.count
-        return palette[((index % n) + n) % n].color
-    }
-}
-
-/// The type the app reads in: New York for what a student wrote down (titles, notes), SF for the rest.
-extension Font {
-    static let display = Font.system(.largeTitle, design: .serif, weight: .semibold)
-    static let titleSerif = Font.system(.title2, design: .serif, weight: .semibold)
-    static let headlineSerif = Font.system(.headline, design: .serif, weight: .semibold)
+/// The desktop's `Palette` (Skin.cs), light then dark.
+enum Palette {
+    static let canvas = UIColor(light: "#E9EBEE", dark: "#0E0F11")
+    static let surface = UIColor(light: "#FFFFFF", dark: "#191A1D")
+    static let surfaceSunken = UIColor(light: "#F5F6F7", dark: "#202226")
+    static let surfaceToday = UIColor(light: "#FFFFFF", dark: "#2A2C31")
+    static let line = UIColor(light: "#DDE0E4", dark: "#2D3035")
+    // Skin.cs: Hover 0x1F/0x29 and Press 0x33/0x42 of rgb(127, 127, 127).
+    static let hover = UIColor(light: "#7F7F7F1F", dark: "#7F7F7F29")
+    static let press = UIColor(light: "#7F7F7F33", dark: "#7F7F7F42")
+    static let ink = UIColor(light: "#1D1F23", dark: "#ECEEF1")
+    static let inkMuted = UIColor(light: "#565C66", dark: "#A4A9B1")
+    static let inkSubtle = UIColor(light: "#626973", dark: "#8D939C")
+    static let record = UIColor(light: "#D42A1A", dark: "#FF5A47")
+    static let onRecord = UIColor(light: "#FFFFFF", dark: "#1A0603")
+    static let late = UIColor(light: "#B3261E", dark: "#FF8A80")
+    static let focus = UIColor(light: "#1D1F23", dark: "#ECEEF1")
 }
 
 extension ShapeStyle where Self == Color {
-    /// The page behind cards: warm paper in the light, deep ink in the dark.
-    static var paper: Color {
-        Color(UIColor { $0.userInterfaceStyle == .dark
-            ? UIColor(red: 0.075, green: 0.078, blue: 0.086, alpha: 1)
-            : UIColor(red: 0.972, green: 0.968, blue: 0.957, alpha: 1) })
+    /// The desk behind everything: an iPad's sidebar sits straight on it.
+    static var canvas: Color { Color(uiColor: Palette.canvas) }
+    /// The page: every screen's background, the Ask bar, a chosen row's chip.
+    static var surface: Color { Color(uiColor: Palette.surface) }
+    /// A grouped box on the page (a settings group, the calendar's grid).
+    static var surfaceSunken: Color { Color(uiColor: Palette.surfaceSunken) }
+    /// Today's cell, lifted out of the sunken grid.
+    static var surfaceToday: Color { Color(uiColor: Palette.surfaceToday) }
+    /// Hairlines and 1-point outlines.
+    static var line: Color { Color(uiColor: Palette.line) }
+    /// The wash under a finger (a pressed row), and the highlight of a note with no folder.
+    static var hover: Color { Color(uiColor: Palette.hover) }
+    static var press: Color { Color(uiColor: Palette.press) }
+    /// Titles and anything you act on: the app's tint.
+    static var ink: Color { Color(uiColor: Palette.ink) }
+    /// Summaries, dates, what the AI wrote.
+    static var inkMuted: Color { Color(uiColor: Palette.inkMuted) }
+    /// Counts, times, placeholders.
+    static var inkSubtle: Color { Color(uiColor: Palette.inkSubtle) }
+    /// The record dot, the live meter and a recording's outline. Nothing else.
+    static var record: Color { Color(uiColor: Palette.record) }
+    /// What sits on the record dot.
+    static var onRecord: Color { Color(uiColor: Palette.onRecord) }
+    /// "Missing" and "Was due…". Nothing else.
+    static var late: Color { Color(uiColor: Palette.late) }
+    /// A 2-point focus ring.
+    static var focus: Color { Color(uiColor: Palette.focus) }
+}
+
+/// A class's colour: one highlighter each, shown only as a small swatch, a highlight behind the class's name and the
+/// underline under a class page's title (never a dot, a bar, a status or a filled area). The highlighter is the shade
+/// behind ink text (deep in dark, so the text stays light); the swatch has nothing on it (brighter in dark).
+enum Highlighter: String, CaseIterable, Sendable, Hashable {
+    case yellow, green, pink, blue, orange, violet, teal, lime
+
+    /// The order classes take them as they're added, by their place in the library (the library's `color` for a
+    /// class): the desktop's `Skin.ClassHues`, so a class is the same colour on the phone as on the computer.
+    static let classOrder: [Highlighter] = [.yellow, .green, .orange, .pink, .blue, .teal, .violet, .lime]
+
+    /// The class at `index` in the library (its `color`).
+    init(classIndex index: Int) {
+        let n = Self.classOrder.count
+        self = Self.classOrder[((index % n) + n) % n]
     }
 
-    /// A card on the paper.
-    static var card: Color {
-        Color(UIColor { $0.userInterfaceStyle == .dark
-            ? UIColor(red: 0.125, green: 0.128, blue: 0.140, alpha: 1)
-            : UIColor(red: 1, green: 1, blue: 0.998, alpha: 1) })
+    var highlight: Color { Color(uiColor: highlightUI) }
+    var swatch: Color { Color(uiColor: swatchUI) }
+
+    var highlightUI: UIColor {
+        switch self {
+        case .yellow: UIColor(light: "#FFE46B", dark: "#5A4C00")
+        case .green: UIColor(light: "#B5EEA6", dark: "#1F4F2C")
+        case .pink: UIColor(light: "#FFC2DF", dark: "#5B2244")
+        case .blue: UIColor(light: "#BCDCFF", dark: "#1D4263")
+        case .orange: UIColor(light: "#FFCF98", dark: "#5B380F")
+        case .violet: UIColor(light: "#DACBFF", dark: "#3D2E68")
+        case .teal: UIColor(light: "#A6EBE1", dark: "#134F48")
+        case .lime: UIColor(light: "#E2F28C", dark: "#44500E")
+        }
+    }
+
+    var swatchUI: UIColor {
+        switch self {
+        case .yellow: UIColor(light: "#FFE46B", dark: "#E9CF4A")
+        case .green: UIColor(light: "#B5EEA6", dark: "#7FD27A")
+        case .pink: UIColor(light: "#FFC2DF", dark: "#F08CBF")
+        case .blue: UIColor(light: "#BCDCFF", dark: "#7DB8F2")
+        case .orange: UIColor(light: "#FFCF98", dark: "#F0A95A")
+        case .violet: UIColor(light: "#DACBFF", dark: "#B39CF5")
+        case .teal: UIColor(light: "#A6EBE1", dark: "#62D3C3")
+        case .lime: UIColor(light: "#E2F28C", dark: "#C4DC55")
+        }
+    }
+
+    /// The highlight behind a name with no class (an event no class matched): the pressed-row wash, as on the desktop.
+    static var none: Color { .hover }
+    /// A swatch for no class: the desktop's grey.
+    static let noneSwatch = Color(uiColor: UIColor(hex: "#808080"))
+}
+
+/// Corner radii, nested: a control inside today's cell inside a panel inside the page.
+enum Radius {
+    /// Buttons that aren't pills, rows, a picker, a segment group.
+    static let control: CGFloat = 8
+    /// Today's cell; a menu.
+    static let day: CGFloat = 10
+    static let menu: CGFloat = 10
+    /// A grouped box, the calendar's grid, the Ask bar, a toast.
+    static let panel: CGFloat = 12
+    /// The main sheet (the iPad's page beside its sidebar).
+    static let pane: CGFloat = 14
+    // Record and Attach are pills: as round as they're tall (Capsule).
+}
+
+/// Space, on a 4-point base (tokens.css `--space-*`).
+enum Space {
+    static let s1: CGFloat = 4, s2: CGFloat = 8, s3: CGFloat = 12, s4: CGFloat = 16, s5: CGFloat = 20
+    static let s6: CGFloat = 24, s8: CGFloat = 32, s10: CGFloat = 40, s14: CGFloat = 56
+    /// A screen's side margin on a phone, and on an iPad's page (the desktop's 24 when narrow, 56 when wide).
+    static let pageCompact: CGFloat = 20
+    static let pageRegular: CGFloat = 56
+}
+
+/// The two shadows anything is lifted on (tokens.css): each is a hairline round it and a soft shadow under it.
+enum Lift {
+    /// Today's cell.
+    case today
+    /// What floats: the Ask bar, a menu, a toast, the recorder.
+    case float
+    /// The same, ringed in ink. (Not the Ask bar: it keeps its hairline with the caret in it, as a ring of the light
+    /// ink read as a bright white border in dark.)
+    case floatFocus
+}
+
+extension View {
+    /// Lift this on a shadow, as the desktop does (`ShadowToday`, `ShadowFloat`, `ShadowFloatFocus`): the outline is
+    /// drawn round `shape`, and the shadow (`0 6 14 -8` or `0 10 30 -12`, black at 18/25% light, 60/70% dark) under it.
+    func lifted<S: InsettableShape>(_ lift: Lift, in shape: S) -> some View {
+        modifier(Lifted(lift: lift, shape: shape))
     }
 }
 
-extension Color {
-    /// "#rrggbb", for what the widgets read.
-    var hexString: String {
-        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-        UIColor(self).resolvedColor(with: UITraitCollection(userInterfaceStyle: .light)).getRed(&r, green: &g, blue: &b, alpha: &a)
-        return String(format: "#%02x%02x%02x", Int(r * 255), Int(g * 255), Int(b * 255))
+private struct Lifted<S: InsettableShape>: ViewModifier {
+    var lift: Lift
+    var shape: S
+    @Environment(\.colorScheme) private var scheme
+
+    func body(content: Content) -> some View {
+        let dark = scheme == .dark
+        let (y, blur, spread, alpha): (CGFloat, CGFloat, CGFloat, Double) = switch lift {
+        case .today: (6, 14, -8, dark ? 0.6 : 0.18)
+        case .float, .floatFocus: (10, 30, -12, dark ? 0.7 : 0.25)
+        }
+        content
+            .background {
+                // A CSS shadow with a negative spread: the shape drawn smaller by the spread, blurred by half the blur.
+                shape.inset(by: -spread).fill(.black.opacity(alpha))
+                    .blur(radius: blur / 2)
+                    .offset(y: y)
+                    .allowsHitTesting(false)
+            }
+            .overlay {
+                shape.strokeBorder(lift == .floatFocus ? Color.ink : .line, lineWidth: lift == .floatFocus ? 1.5 : 1)
+                    .allowsHitTesting(false)
+            }
+    }
+}
+
+/// Light, dark, or as the phone is: Settings' choice (`@AppStorage("appearance")`), applied at the app's root.
+enum Appearance: String, CaseIterable, Identifiable, Sendable {
+    case system, light, dark
+    static let key = "appearance"
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .system: "Match system"
+        case .light: "Light"
+        case .dark: "Dark"
+        }
+    }
+    var scheme: ColorScheme? {
+        switch self {
+        case .system: nil
+        case .light: .light
+        case .dark: .dark
+        }
     }
 }

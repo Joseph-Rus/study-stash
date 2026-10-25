@@ -87,11 +87,13 @@ final class Recorder {
         guard !isActive else { return }
         phase = .preparing("Getting the microphone…")
         guard await AVAudioApplication.requestRecordPermission() else {
-            phase = .failed("Study Stash can't use the microphone. Turn it on in Settings → Study Stash.")
+            phase = .failed("Study Stash can't use the microphone. Turn it on in Settings, then Study Stash.")
             return
         }
         let id = Recording.newID()
-        var r = Recording(id: id, started: .now, className: className, title: title, titleTyped: !title.isEmpty)
+        // A title handed in is a working one (an event's, "Calculus II, Fri 16 Oct"), as the desktop's: the library
+        // still names the lecture from what's said unless the student types a title of their own.
+        var r = Recording(id: id, started: .now, className: className, title: title, titleTyped: false)
         do {
             let session = AVAudioSession.sharedInstance()
             try session.setCategory(.playAndRecord, mode: .spokenAudio, options: [.allowBluetoothHFP, .defaultToSpeaker, .mixWithOthers])
@@ -100,7 +102,7 @@ final class Recorder {
             phase = .preparing("Getting ready to write down what's said…")
             #if targetEnvironment(simulator)
             // The simulator has no speech model: lines of a lecture stand in for what's heard.
-            if ProcessInfo.processInfo.arguments.contains("-record") {
+            if DebugLaunch.fakeMicrophone {
                 return startSimulated(r)
             }
             #endif
@@ -121,7 +123,10 @@ final class Recorder {
                                     file: store.folder.appending(path: r.audio!)) { [weak self] level in
                 Task { @MainActor in self?.heard(level) }
             }
-            node.installTap(onBus: 0, bufferSize: 4096, format: micFormat) { buffer, _ in feeder.feed(buffer) }
+            // @Sendable: the microphone calls this on its own audio thread. Written plainly inside this @MainActor
+            // class, Swift 6 makes it main-actor-only and stops the app on the first buffer (on a phone, never in the
+            // simulator, whose pretend microphone doesn't tap). Feeder is safe on any thread.
+            node.installTap(onBus: 0, bufferSize: 4096, format: micFormat) { @Sendable buffer, _ in feeder.feed(buffer) }
             engine.prepare()
             try engine.start()
 
@@ -275,13 +280,13 @@ final class Recorder {
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
-    /// "This matters": the moment, starred in what's typed, so the notes make something of it.
+    /// "This matters": the moment, marked in what's typed, so the notes make something of it.
     func mark() {
         guard isActive else { return }
         let at = Format.clock(elapsed)
         let said = (recording?.segments.last?.text ?? volatile).split(separator: " ").suffix(8).joined(separator: " ")
         update { r in
-            let line = "- ⭐ Important at \(at)" + (said.isEmpty ? "" : ": “…\(said)”")
+            let line = "- Important at \(at)" + (said.isEmpty ? "" : ": “…\(said)”")
             r.notes = r.notes.isEmpty || r.notes.hasSuffix("\n") ? r.notes + line + "\n" : r.notes + "\n" + line + "\n"
         }
         UIImpactFeedbackGenerator(style: .rigid).impactOccurred()

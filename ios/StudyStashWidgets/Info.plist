@@ -23,5 +23,14 @@
 		<key>NSExtensionPointIdentifier</key>
 		<string>com.apple.widgetkit-extension</string>
 	</dict>
+	<key>UIAppFonts</key>
+	<array>
+		<string>AtkinsonHyperlegibleNext-Light.ttf</string>
+		<string>AtkinsonHyperlegibleNext-Regular.ttf</string>
+		<string>AtkinsonHyperlegibleNext-Medium.ttf</string>
+		<string>AtkinsonHyperlegibleNext-SemiBold.ttf</string>
+		<string>AtkinsonHyperlegibleNext-Bold.ttf</string>
+		<string>AtkinsonHyperlegibleNext-ExtraBold.ttf</string>
+	</array>
 </dict>
 </plist>

@@ -34,7 +34,9 @@ import Testing
         func f32(_ x: Float) -> Data { withUnsafeBytes(of: x.bitPattern.littleEndian) { Data($0) } }
         func u16(_ x: Int) -> Data { withUnsafeBytes(of: UInt16(x).littleEndian) { Data($0) } }
         let sig = "vA(v)A(u)A(u)"
-        let body = u16(2) + le32(1) + u16(4) + le32(1) + f32(0.4) + le32(6) + [1, 2, 0.5, 3, 4, 0.6].map { f32($0) }.reduce(Data(), +)
+        let floats: [Float] = [1, 2, 0.5, 3, 4, 0.6]
+        let head: Data = u16(2) + le32(1) + u16(4) + le32(1) + f32(0.4) + le32(6)
+        let body = head + floats.map(f32).reduce(Data(), +)
         let blob = Data("tpl\0".utf8) + le32(0) + Data(sig.utf8) + Data([0]) + body
         let t = TPL(blob)
         #expect(t?.signature == sig)

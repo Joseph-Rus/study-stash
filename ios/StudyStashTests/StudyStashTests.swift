@@ -25,6 +25,66 @@ import Testing
         #expect(LibraryAddress.candidates(from: "").isEmpty)
         #expect(LibraryAddress.candidates(from: "ftp://example.com").isEmpty)
     }
+
+    @Test func qrCodeWithItsCodeGivesTheSameAddressesAndTheCode() {
+        let qr = "http://100.64.0.1:8787/app/?https=https%3A%2F%2Fmac.tail1234.ts.net%3A8443%2Fapp%2F#code=042917"
+        #expect(LibraryAddress.candidates(from: qr).map(\.absoluteString) == [
+            "https://mac.tail1234.ts.net:8443", "http://100.64.0.1:8787",
+        ])
+        #expect(LibraryAddress.code(from: qr) == "042917")
+        #expect(LibraryAddress.code(from: "http://100.64.0.1:8787/app/?code=042917") == "042917")
+        #expect(LibraryAddress.code(from: "100.64.0.1:8787#code=042917") == "042917")
+        #expect(LibraryAddress.candidates(from: "100.64.0.1#code=042917").map(\.absoluteString) == ["http://100.64.0.1"])
+        #expect(LibraryAddress.code(from: "mac.tail1234.ts.net:8443/app/#code=042%20917") == "042917")
+    }
+
+    @Test func noCodeOrNotSixDigitsAsksForIt() {
+        #expect(LibraryAddress.code(from: "http://100.64.0.1:8787/app/?https=https%3A%2F%2Fmac.tail1234.ts.net%3A8443%2Fapp%2F") == nil)
+        #expect(LibraryAddress.code(from: "mac.tail1234.ts.net:8443") == nil)
+        #expect(LibraryAddress.code(from: "http://100.64.0.1:8787/app/#code=04291") == nil)
+        #expect(LibraryAddress.code(from: "http://100.64.0.1:8787/app/#code=abcdef") == nil)
+        #expect(LibraryAddress.code(from: "") == nil)
+    }
+}
+
+// MARK: - pairing with the code the QR code brought
+
+@MainActor @Suite struct ScanPairingTests {
+    let base = URL(string: "http://100.64.0.1:8787")!
+    let library = Me.Library(name: "Joey's library", version: "0.17.2")
+    func joined(needsUses: Bool) -> Joined { Joined(base: base, library: library, needsUses: needsUses) }
+
+    @Test func aCodeFromTheScanPairsAndSkipsTheCodePage() async {
+        var sent: String?
+        let (page, joined) = await ScanPairing.next(base: base, library: library, code: "042917") { code in
+            sent = code
+            return self.joined(needsUses: false)
+        }
+        #expect(sent == "042917")
+        #expect(page == .done)
+        #expect(joined?.library == library)
+        let (first, _) = await ScanPairing.next(base: base, library: library, code: "042917") { _ in self.joined(needsUses: true) }
+        #expect(first == .uses)
+    }
+
+    @Test func aRefusedCodeOpensTheCodePageWithTheLibrarysWords() async {
+        let words = "That code isn't right, or it's more than ten minutes old. Make a new one in Study Stash's Settings."
+        let (page, joined) = await ScanPairing.next(base: base, library: library, code: "042917") { _ in
+            throw APIError(status: 401, detail: words)
+        }
+        #expect(page == .code(base: base, library: library, problem: words))
+        #expect(joined == nil)
+    }
+
+    @Test func noCodeIsTheCodePageAsBefore() async {
+        var asked = false
+        let (page, _) = await ScanPairing.next(base: base, library: library, code: nil) { _ in
+            asked = true
+            return self.joined(needsUses: false)
+        }
+        #expect(!asked)
+        #expect(page == .code(base: base, library: library))
+    }
 }
 
 // MARK: - the client
@@ -97,6 +157,38 @@ import Testing
         """, as: AskEvent.self)
         guard case .done(let reply) = done else { Issue.record("done"); return }
         #expect(reply.sources.count == 1)
+        // A kept chat's id comes first: an answer, not an error.
+        guard case .chat("261024-101500-a1b2c3") = try decode(#"{"kind":"chat","id":"261024-101500-a1b2c3"}"#, as: AskEvent.self) else {
+            Issue.record("chat"); return
+        }
+    }
+
+    /// Which AI answers Ask: the library's `GET /ai` says it by its id ("codex" is ChatGPT); an answer by its name.
+    @Test func theAnsweringAIIsReadFromTheLibrary() throws {
+        let s = try decode("""
+        {"provider":"claude","jobs":{"notes":{"provider":"claude","model":"","own":false},"ask":{"provider":"codex","model":"gpt-5","own":true}},
+         "providers":[{"id":"claude","name":"Claude","installed":true,"site":"","test":"","models":[]}]}
+        """, as: AISettings.self)
+        #expect(AskEngine(id: s.jobs?["ask"]?.provider) == .chatgpt)
+        #expect(AskEngine(id: "gemini") == .gemini && AskEngine(id: "ollama") == .ollama && AskEngine(id: "something") == nil)
+        #expect(AskEngine(name: "Local model (Ollama)") == .ollama && AskEngine(name: "Claude") == .claude)
+    }
+
+    /// A chat picked from Chats opens as it was: each question with its answer and sources, a failed one with why.
+    @Test @MainActor func aKeptChatOpensAsItsTurns() throws {
+        let chat = try decode("""
+        {"id":"c1","title":"Limits","class":"Calculus II","lecture":"","updated":"2026-10-24T09:00:00.0000000-07:00","kind":"ask","scope":"home","turns":2,
+         "messages":[{"role":"user","text":"What's a limit?","when":"","tools":[]},
+                     {"role":"assistant","text":"Where f goes **near** a point.","when":"","tools":[],"failed":false,
+                      "sources":[{"id":"l1","title":"Limits","class":"Calculus II","date":"2026-10-20","at":95,"section":""}],"engine":"claude","engine_name":"Claude","stopped":false},
+                     {"role":"user","text":"And continuity?","when":"","tools":[]},
+                     {"role":"assistant","text":"Claude didn't answer.","when":"","tools":[],"failed":true}]}
+        """, as: Chat.self)
+        let turns = AskConversation.turns(of: chat)
+        #expect(turns.map(\.question) == ["What's a limit?", "And continuity?"])
+        #expect(turns[0].state == .done && turns[0].engine == "Claude" && turns[0].sources.first?.times == [95])
+        #expect(turns[1].state == .failed && turns[1].problem == "Claude didn't answer." && turns[1].answer.isEmpty)
+        #expect(ChatSummary(id: "c1", title: "", class: "", lecture: "", updated: "", kind: "ask").isAsk)
     }
 
     @Test func modelsRoundTripThroughTheCache() throws {
@@ -128,7 +220,16 @@ import Testing
         #expect(Format.duration(30) == "under a minute")
         #expect(Format.duration(48 * 60) == "48 min")
         #expect(Format.duration(72 * 60) == "1 h 12 min")
-        #expect(Format.duration(120 * 60) == "2 h")
+        #expect(Format.duration(120 * 60) == "2 h 00 min")
+    }
+
+    @Test func daysAndTimesInTheDesktopsWords() {
+        #expect(Format.day(Format.parse("2026-10-15T09:30")!, now: now) == "Today")
+        #expect(Format.day(Format.parse("2026-10-14")!, now: now) == "Yesterday")
+        #expect(Format.day(Format.parse("2026-10-07")!, now: now) == "Wed 7 Oct")
+        #expect(Format.day(Format.parse("2025-10-07")!, now: now) == "7 Oct 2025")
+        #expect(Format.time(Format.parse("2026-10-15T21:05")!) == "9:05 PM")
+        #expect(Format.noteWhen("2026-10-12T09:30:00", 52 * 60, now: now) == "Monday 12 October at 9:30 AM, 52 min")
     }
 
     @Test func dueWhenIsTheDayForMidnight() {
@@ -194,11 +295,9 @@ import Testing
         #expect(s.map(\.id) == ["l1", "l2"])
     }
 
-    @Test func oklchMatchesKnownColours() {
-        let white = OKLCH(l: 1, c: 0, h: 0).rgb
-        #expect(abs(white.r - 1) < 0.01 && abs(white.g - 1) < 0.01 && abs(white.b - 1) < 0.01)
-        #expect(ColourTheme.named("plum").name == "Plum")
-        #expect(ColourTheme.named("nope") == .lagoon)
+    @Test func aClassHasTheDesktopsHighlighter() {
+        // Skin.ClassHues: the order classes take them by their place in the library.
+        #expect((0..<9).map { Highlighter(classIndex: $0) } == [.yellow, .green, .orange, .pink, .blue, .teal, .violet, .lime, .yellow])
     }
 }
 

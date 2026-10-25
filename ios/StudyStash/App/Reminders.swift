@@ -27,16 +27,27 @@ enum Reminders {
         }
     }
 
-    /// Ask once, and say what Record does.
-    static func setUp() async {
-        #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("-quiet") { return }
-        #endif
+    /// The Record button on a class starting: registered on every launch, asking nothing.
+    static func registerActions() {
         let record = UNNotificationAction(identifier: "record", title: "Record", options: [.foreground])
         center.setNotificationCategories([
             UNNotificationCategory(identifier: Kind.classStart.rawValue, actions: [record], intentIdentifiers: []),
         ])
+    }
+
+    /// Ask to send notifications, once, where the reason has just been said (setup's last step, "Get a reminder
+    /// when a class starts"); never cold at launch.
+    static func setUp() async {
+        registerActions()
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-quiet") { return }
+        #endif
         _ = try? await center.requestAuthorization(options: [.alert, .sound, .badge])
+    }
+
+    /// Whether this phone has been asked yet (setup shows "Get a reminder when a class starts" until it has).
+    static func asked() async -> Bool {
+        await center.notificationSettings().authorizationStatus != .notDetermined
     }
 
     /// Every class start and due reminder from what the library said last, replacing those scheduled before.
@@ -124,7 +135,8 @@ enum Reminders {
     }
 }
 
-/// Notifications tapped: Record starts recording the class; a lecture or assignment opens.
+/// Notifications tapped: a class starting opens Home (its Record button records it); a lecture's notes open the
+/// lecture; something due opens it on Due.
 final class NotificationRouter: NSObject, UNUserNotificationCenterDelegate, @unchecked Sendable {
     static let shared = NotificationRouter()
     @MainActor weak var app: AppModel?
@@ -142,12 +154,14 @@ final class NotificationRouter: NSObject, UNUserNotificationCenterDelegate, @unc
         let assignment = info["assignment"] as? Int
         await MainActor.run {
             guard let app else { return }
-            if action == "record" || kind == Reminders.Kind.classStart.rawValue {
+            if action == "record" {
                 app.record(for: cls)
+            } else if kind == Reminders.Kind.classStart.rawValue {
+                app.go(to: .home)
             } else if let lecture {
-                app.pendingRoute = .lecture(lecture)
+                app.go(.lecture(lecture), tab: .home, root: true)
             } else if let cls, let id = assignment {
-                app.pendingRoute = .assignment(class: cls, id: id)
+                app.go(.assignment(class: cls, id: id), tab: app.forSchool ? .due : .home, root: true)
             }
         }
     }
