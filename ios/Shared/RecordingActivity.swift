@@ -41,6 +41,8 @@ struct StopRecordingIntent: LiveActivityIntent {
 
     func perform() async throws -> some IntentResult {
         await RecordingControl.stop?()
+        // One left by a recording the app didn't finish (closed, or it crashed) goes too.
+        await RecordingControl.endLeftovers()
         return .result()
     }
 }
@@ -50,7 +52,12 @@ struct PauseRecordingIntent: LiveActivityIntent {
     static let title: LocalizedStringResource = "Pause or resume recording"
 
     func perform() async throws -> some IntentResult {
-        await RecordingControl.togglePause?()
+        if await RecordingControl.isRecording?() == true {
+            await RecordingControl.togglePause?()
+        } else {
+            // Nothing is recording: it's one left by a recording the app didn't finish.
+            await RecordingControl.endLeftovers()
+        }
         return .result()
     }
 }
@@ -74,6 +81,16 @@ enum RecordingControl {
     static var stop: (@MainActor () async -> Void)?
     static var togglePause: (@MainActor () -> Void)?
     static var start: (@MainActor () -> Void)?
+    /// Something is recording (or paused) in this app right now.
+    static var isRecording: (@MainActor () -> Bool)?
+
+    /// Ends every recording Live Activity: one left on the lock screen, its clock still counting, by a recording the
+    /// app didn't finish (the app was closed or crashed while it recorded).
+    static func endLeftovers() async {
+        for activity in Activity<RecordingAttributes>.activities {
+            await activity.end(nil, dismissalPolicy: .immediate)
+        }
+    }
 }
 
 // MARK: - How it looks

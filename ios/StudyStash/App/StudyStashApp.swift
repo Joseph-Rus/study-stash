@@ -11,6 +11,15 @@ struct StudyStashApp: App {
     init() {
         UNUserNotificationCenter.current().delegate = NotificationRouter.shared
         SystemLook.apply()
+        // Pause and Stop on the lock screen: wired as the app starts, not when its first screen appears, so a tap that
+        // wakes the app in the background still reaches the recorder.
+        RecordingControl.stop = { await Recorder.shared.stop(api: AppModel.current?.api) }
+        RecordingControl.togglePause = { Recorder.shared.phase == .paused ? Recorder.shared.resume() : Recorder.shared.pause() }
+        RecordingControl.isRecording = { Recorder.shared.isActive }
+        // A Live Activity left by a recording the app didn't finish (closed, or it crashed): nothing records at launch.
+        Task { @MainActor in
+            if !Recorder.shared.isActive { await RecordingControl.endLeftovers() }
+        }
     }
 
     var body: some Scene {
@@ -159,9 +168,8 @@ struct MainTabs: View {
                 withTransaction(t) { app.go(r) }
             }
             #endif
-            // Pause, Stop and Record from the lock screen, Control Center and Siri.
+            // Record from Control Center and Siri (Pause and Stop are wired in init).
             RecordingControl.stop = { [app] in await Recorder.shared.stop(api: app.api) }
-            RecordingControl.togglePause = { Recorder.shared.phase == .paused ? Recorder.shared.resume() : Recorder.shared.pause() }
             RecordingControl.start = { [app] in app.record(for: app.recordClass) }
             // Notifications are asked for in setup's last step, with the reason said; here only their Record button.
             Reminders.registerActions()
