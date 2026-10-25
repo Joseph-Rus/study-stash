@@ -41,7 +41,7 @@ targets:
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: UIInterfaceOrientationPortrait
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
-        INFOPLIST_KEY_NSCameraUsageDescription: Scan the QR code Study Stash shows on your computer to add this phone.
+        INFOPLIST_KEY_NSCameraUsageDescription: Take photos of the whiteboard to add to your lecture's notes, and scan the QR code Study Stash shows on your computer to add this phone.
         INFOPLIST_KEY_NSMicrophoneUsageDescription: Record lectures so Study Stash can write notes from them.
         INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: Write down what's said in a lecture, on this phone.
         INFOPLIST_KEY_NSLocalNetworkUsageDescription: Reach the Study Stash library on your computer.

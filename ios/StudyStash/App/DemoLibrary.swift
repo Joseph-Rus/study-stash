@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import Synchronization
 
 /// A library that lives in the app: made-up classes, lectures with notes, due work, a calendar and answers, for
@@ -55,7 +56,7 @@ final class DemoLibrary: URLProtocol, @unchecked Sendable {
         case ("GET", _) where lecturePath?.hasSuffix("/rendered") == true:
             let id = String(lecturePath!.dropLast("/rendered".count))
             guard let l = lectures.first(where: { $0.id == id }) else { return json(["detail": "no such lecture"], 404) }
-            return json(["id": l.id, "title": l.title, "class": l.cls, "date": l.date, "html": l.html])
+            return json(["id": l.id, "title": l.title, "class": l.cls, "date": l.date, "html": l.html + (DemoPhotos.on && id == DemoPhotos.lecture ? DemoPhotos.embed : "")])
         case ("GET", _) where lecturePath != nil:
             guard let l = lectures.first(where: { $0.id == lecturePath }) else { return json(["detail": "no such lecture"], 404) }
             return json(l.full)
@@ -93,7 +94,9 @@ final class DemoLibrary: URLProtocol, @unchecked Sendable {
                 event("e3", "Organic Chemistry Lab", 2, 13, 170, "Chem 110"),
             ]])
         case ("GET", "/api/v2/attachments"):
-            return json(["attachments": []])
+            return json(["attachments": DemoPhotos.on && q["lecture"] == DemoPhotos.lecture ? DemoPhotos.attachments : []])
+        case ("GET", _) where path.hasPrefix("/api/v2/attachments/demo-board-") && path.hasSuffix("/raw"):
+            return (200, "image/jpeg", DemoPhotos.picture(path))
         case ("GET", "/api/v2/chats"):
             return json([])
         case ("POST", "/api/v2/ai/ask"):
@@ -219,6 +222,17 @@ final class DemoLibrary: URLProtocol, @unchecked Sendable {
     /// Each one's highlighter by its place, as on the desktop: yellow, green, orange.
 
     static var overview: [String: Any] {
+        var o = baseOverview
+        #if DEBUG
+        // `-recording-now`: the laptop is recording a Calculus II lecture (the banner on Home).
+        if DebugLaunch.flag("-recording-now") {
+            o["recording_now"] = ["id": "rec-demo-now", "class": "Calculus II", "title": "Calculus II", "started": ISO8601DateFormatter().string(from: .now.addingTimeInterval(-12 * 60))]
+        }
+        #endif
+        return o
+    }
+
+    static var baseOverview: [String: Any] {
         ["name": "Demo library", "version": "demo", "unsorted": lectures.filter { $0.cls == "Unsorted" }.count, "writing": lectures.filter { $0.status != "done" }.count, "ask": true, "notes_model": "Claude", "uses": ["student"], "for_school": true,
          "classes": classes.enumerated().map { i, c in
              ["name": c, "lectures": lectures.filter { $0.cls == c }.count, "color": i, "description": "", "group": "", "code": ["MATH 162", "PSYC 101", "CHEM 231"][i], "aliases": []] as [String: Any]
@@ -386,5 +400,36 @@ final class DemoLibrary: URLProtocol, @unchecked Sendable {
     static func localISO(_ inDays: Int) -> String {
         let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd'T'23:59"; f.locale = Locale(identifier: "en_US_POSIX")
         return f.string(from: .now.addingTimeInterval(Double(inDays) * 86_400))
+    }
+}
+
+
+/// `-photos-demo`: a calculus lecture with three whiteboard photos in its strip and the second embedded in its notes.
+enum DemoPhotos {
+    static let lecture = "demo-calc-ibp"
+    static var on: Bool { DebugLaunch.flag("-photos-demo") }
+    static let embed = "<h2>On the board</h2><p><img src=\"/api/v2/attachments/demo-board-2/raw\" alt=\"Whiteboard at 12:34\"></p>"
+
+    static var attachments: [[String: Any]] {
+        [(1, 4.0 * 60), (2, 12 * 60 + 34), (3, 31.0 * 60)].map { n, at in
+            ["id": "demo-board-\(n)", "name": "whiteboard-\(n).jpg", "class": "Calculus II", "lecture": lecture, "size": 180_000,
+             "type": "image/jpeg", "added": "2026-10-24T09:00:00-07:00", "hasText": false, "reading": false,
+             "taken": "2026-10-24T09:\(10 + n):00-07:00", "at": at, "kind": "whiteboard"]
+        }
+    }
+
+    /// A made-up board: white, a green frame and a few lines of marker.
+    static func picture(_ path: String) -> Data {
+        let n = Int(path.split(separator: "-").last?.prefix(1) ?? "1") ?? 1
+        let size = CGSize(width: 800, height: 600)
+        return UIGraphicsImageRenderer(size: size).jpegData(withCompressionQuality: 0.8) { c in
+            UIColor(white: 0.97, alpha: 1).setFill(); c.fill(CGRect(origin: .zero, size: size))
+            UIColor(white: 0.55, alpha: 1).setStroke()
+            c.cgContext.setLineWidth(10); c.cgContext.stroke(CGRect(origin: .zero, size: size))
+            let ink: [NSAttributedString.Key: Any] = [.font: UIFont.systemFont(ofSize: 54, weight: .semibold), .foregroundColor: UIColor(red: 0.1, green: 0.2, blue: 0.5, alpha: 1)]
+            ["∫ u dv = uv − ∫ v du", "u = x, dv = eˣ dx", "LIATE (\(n))"].enumerated().forEach { i, t in
+                (t as NSString).draw(at: CGPoint(x: 60, y: 90 + CGFloat(i) * 130), withAttributes: ink)
+            }
+        }
     }
 }

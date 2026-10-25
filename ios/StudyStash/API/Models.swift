@@ -51,12 +51,23 @@ struct LibraryOverview: Codable, Sendable {
     /// What it's for ("student", "work", ...); empty until asked, nil from a library before it was asked.
     var uses: [String]?
     var forSchool: Bool?
+    /// The laptop is recording a lecture now (nil when it isn't, or from a library before photos).
+    var recordingNow: RecordingNow?
 
     enum CodingKeys: String, CodingKey {
         case name, version, classes, unsorted, writing, ask, uses
+        case recordingNow = "recording_now"
         case notesModel = "notes_model"
         case forSchool = "for_school"
     }
+}
+
+/// A lecture the laptop is recording right now: its id, class, title, and when it started (ISO 8601 with offset).
+struct RecordingNow: Codable, Sendable, Hashable {
+    var id: String
+    var `class`: String?
+    var title: String?
+    var started: String
 }
 
 /// One lecture in a list.
@@ -333,6 +344,13 @@ struct Attachment: Codable, Sendable, Hashable, Identifiable {
     var hasText: Bool
     /// Still being read: show "Reading your handwriting…" and keep asking.
     var reading: Bool
+    /// A whiteboard photo: when it was taken, and the second of the lecture it was (the library works that out).
+    var taken: String?
+    var at: Double?
+    /// "whiteboard" for a photo taken during the lecture.
+    var kind: String?
+
+    var isWhiteboard: Bool { kind == "whiteboard" }
 }
 
 /// A recording sent from the phone: waiting for a computer, being written down there, done, or failed.

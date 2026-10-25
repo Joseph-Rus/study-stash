@@ -23,6 +23,7 @@ struct LectureView: View {
     @State private var lecture: Resource<Lecture>?
     @State private var notes: Resource<RenderedLecture>?
     @State private var files: Resource<[Attachment]>?
+    @State private var photoNotes: (source: String, html: String)?
     @State private var pane: Pane = DebugLaunch.pane == "Transcript" ? .transcript : .notes
     @State private var onlyMine = DebugLaunch.flag("-only-mine")
     @State private var asking = false
@@ -75,6 +76,14 @@ struct LectureView: View {
                 .accessibilityIdentifier("page.lecture")
                 .task(id: l == nil) { await openAtMoment(l, proxy, at: moment) }
                 .task(id: jump) { if let jump { await openAtMoment(l, proxy, at: jump.at) } }
+                #if DEBUG
+                // Pictures: `-scroll-to-end` after the page has filled in.
+                .task(id: files?.value?.count) {
+                    guard DebugLaunch.flag("-scroll-to-end"), files?.value?.isEmpty == false else { return }
+                    try? await Task.sleep(for: .seconds(2))
+                    withAnimation(nil) { proxy.scrollTo("end-of-page", anchor: .bottom) }
+                }
+                #endif
             }
             if inkBeside, let l {
                 Rectangle().fill(.line).frame(width: 1).ignoresSafeArea()
@@ -357,14 +366,34 @@ struct LectureView: View {
         VStack(alignment: .leading, spacing: 0) {
             if let html = noteHTML, !html.isEmpty, !Self.writing(l) {
                 legend(l)
-                NotesView(html: html, provenance: true, onlyMine: onlyMine && someMine(l))
+                NotesView(html: shown(html, l), provenance: true, onlyMine: onlyMine && someMine(l))
+                    .task(id: "\(html.hashValue)-\(files?.value?.count ?? -1)") { await inlinePhotos(html) }
                     .padding(.top, 14)
             } else {
                 unwritten(l)
             }
             attached(l)
+            Color.clear.frame(height: 1).id("end-of-page")
         }
         .padding(.top, 18)
+    }
+
+    /// The notes with the lecture's own embedded photos in them (fetched through the app's session), or, until
+    /// they're in, without.
+    private func shown(_ html: String, _ l: Lecture) -> String {
+        guard !NotePhotos.ids(in: html).isEmpty else { return html }
+        if let p = photoNotes, p.source == html { return p.html }
+        return NotePhotos.strip(html)
+    }
+
+    private func inlinePhotos(_ html: String) async {
+        guard let api = app.api, !NotePhotos.ids(in: html).isEmpty else { return }
+        let mine = Set((files?.value ?? []).filter { $0.type.hasPrefix("image/") }.map(\.id))
+        let out = await NotePhotos.inline(html, allowed: mine) { id in
+            guard let (data, _) = try? await AppModel.session.data(for: URLRequest(url: api.attachmentURL(id), timeoutInterval: 120)) else { return nil }
+            return await Task.detached { NotePhotos.small(data) }.value
+        }
+        photoNotes = (html, out)
     }
 
     /// The notes' marks: whose words are whose.
@@ -447,8 +476,17 @@ struct LectureView: View {
 
     /// What's attached to it, at the end of the notes: files, then notebooks written for it on this phone.
     @ViewBuilder private func attached(_ l: Lecture) -> some View {
-        let list = files?.value ?? []
+        let everything = files?.value ?? []
+        let list = everything.filter { !$0.isWhiteboard }
+        let boards = WhiteboardStrip.ordered(everything)
         let books = store.notebooks.filter { $0.lectureID == l.id }
+        if !boards.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Whiteboard").textStyle(.h2).foregroundStyle(.ink).accessibilityAddTraits(.isHeader)
+                WhiteboardStrip(photos: boards)
+            }
+            .padding(.top, 36)
+        }
         if !list.isEmpty || !books.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Attached").textStyle(.h2).foregroundStyle(.ink).accessibilityAddTraits(.isHeader)

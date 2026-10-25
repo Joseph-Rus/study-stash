@@ -38,6 +38,7 @@ private struct LibraryHome: View {
     @State private var moved: [String: String] = [:]
     /// The note whose folder is being picked.
     @State private var moving: LectureSummary?
+    @State private var shooting: PhotoTarget?
     @State private var toast: HomeToast?
     @State private var askingUses = false
     /// Answered (or put off) here: the row goes at once.
@@ -106,6 +107,14 @@ private struct LibraryHome: View {
         .animation(.smooth, value: toast)
         .refreshable { await loadAll() }
         .task { await loadAll() }
+        // While the laptop records, its banner appears (and goes) within one read of the library's copy.
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(10))
+                await library.load()
+            }
+        }
+        .fullScreenCover(item: $shooting) { BoardCamera(target: $0) }
         .onChange(of: library.value?.classes) { _, _ in if let v = library.value { app.learn(v) } }
         .onChange(of: onlyUnsorted) { _, only in if only { Task { await unsorted.load() } } }
         .sheet(item: $moving) { l in
@@ -123,6 +132,9 @@ private struct LibraryHome: View {
     @ViewBuilder private func page(now: Date) -> some View {
         if app.isDemo { demoBanner.padding(.bottom, 20) }
         header(now: now)
+        if let n = library.value?.recordingNow {
+            RecordingNowBanner(info: n, now: now) { shooting = RecordingNowBanner.target(n) }.padding(.top, 20)
+        }
         if app.needsUses && !usesDone { usesRow.padding(.top, 20) }
         if stale { HomeOffline().padding(.top, 20) }
         OnThisPhone(gap: gap)

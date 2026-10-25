@@ -66,6 +66,7 @@ enum IconNames {
         "hourglass_top",
         "hub",
         "image",
+        "photo_camera",
         "inbox",
         "info",
         "ios_share",

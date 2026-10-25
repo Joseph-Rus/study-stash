@@ -133,6 +133,7 @@ final class RecordingStore {
         recordings.removeAll { $0.id == r.id }
         try? FileManager.default.removeItem(at: folder.appending(path: "\(r.id).json"))
         if let a = audioURL(r) { try? FileManager.default.removeItem(at: a) }
+        if r.state != .sent { PhotoStore.shared.discard(lecture: r.id) }
     }
 
     /// Send one to the library. Nothing said means nothing to send: it's kept, and says so.
@@ -163,11 +164,14 @@ final class RecordingStore {
             r.error = nil
         }
         save(r)
+        // The whiteboard photos taken during it go once the lecture is there.
+        if r.state == .sent { await PhotoStore.shared.sendWaiting(api: api) }
     }
 
     /// Everything waiting, sent now (when the app comes back, or the library can be reached again).
     func sendWaiting(api: APIClient) async {
         for r in recordings where r.state == .waiting { await send(r.id, api: api) }
+        await PhotoStore.shared.sendWaiting(api: api)
     }
 }
 
