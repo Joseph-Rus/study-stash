@@ -1,10 +1,11 @@
 import SwiftUI
 
-// Ask, as the desktop's ask bar and answer card have it (MacAiAskBar, MacAiAnswer, AiByline, AiChatsMenu): the question
-// typed into the Ask bar at the foot of the page ("Ask anything about your notes", its scope "All notes" beside it);
-// each answer in ink in the notes' type as it's written, who answered under it, and the lectures it used, each opening
-// at its moment. What's happening while there are no words yet is said: "Asking your laptop…", "Reading your notes…".
-// The conversation is kept by the library as a chat: Chats lists them (the computer's too), New chat starts another.
+// Ask, as the chat screens of the Claude and ChatGPT apps have it, in Study Stash's look: no big title, the chats
+// before on the left, the answering AI's own mark and name in the middle, New chat on the right; a nearly empty page
+// until something's asked; the question in a quiet bubble on the right and the answer full width under it, the AI's
+// own thinking mark while there are no words yet, then the lectures it used as small chips, who answered, Copy and Ask
+// again as quiet icons; and one pill at the foot: what it asks about, the question, the send circle. The conversation
+// is kept by the library as a chat, as the desktop keeps them (AiAskModel.Chats).
 
 /// Where a lecture an answer came from opens: at the moment it drew on, on the Transcript.
 func askLectureRoute(_ id: String, at: Double?) -> Route { .lecture(id, at: at) }
@@ -22,7 +23,7 @@ struct AskTab: View {
                 if let id = source.id { app.go(askLectureRoute(id, at: at), tab: .home) }
             }
             .navigationTitle("Ask")
-            .navigationBarTitleDisplayMode(.large)
+            .navigationBarTitleDisplayMode(.inline)
             .routes()
         }
     }
@@ -82,14 +83,15 @@ struct AskSheet: View {
     }
 }
 
-/// The page both share: what to ask and the chats before (or the questions asked and their answers), Chats and New
-/// chat over it, and the Ask bar at its foot.
+/// The page both share: the chats and New chat over it, the questions asked and their answers (or, before any, the
+/// answering AI's mark and one line), and the bar at its foot.
 private struct AskThread: View {
     @Environment(AppModel.self) private var app
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.colorScheme) private var scheme
     var conversation: AskConversation
     @Binding var scope: AskScope
-    /// Where it was opened: the scopes the bar offers follow from it (a lecture: it, its class, all notes).
+    /// Where it was opened: the scopes the bar offers follow from it (a lecture: it too).
     var base: AskScope
     /// The Ask tab (its conversation kept on the phone too), not a sheet.
     var isTab: Bool
@@ -100,16 +102,25 @@ private struct AskThread: View {
     @State private var question = ""
     @State private var classes: [ClassInfo] = ResponseCache.shared.read("library", as: LibraryOverview.self)?.classes ?? []
     @State private var recent: [LectureSummary] = ResponseCache.shared.read("recent", as: [LectureSummary].self) ?? []
-    @State private var chats: [ChatSummary] = []
     /// Chats started here, until the library's list has them.
     @State private var made: [ChatSummary] = []
     @State private var noAI = false
-    @State private var picking = false
     @State private var showChats = false
     @State private var warmed = false
     /// The page follows the answer as it's written, unless the student has scrolled up to read.
     @State private var following = true
     @State private var toast: String?
+    private var engines = AskEngineWatch.shared
+
+    init(conversation: AskConversation, scope: Binding<AskScope>, base: AskScope, isTab: Bool, firstQuestion: String? = nil,
+         open: @escaping (AskTurn.Source, Double?) -> Void) {
+        self.conversation = conversation
+        _scope = scope
+        self.base = base
+        self.isTab = isTab
+        self.firstQuestion = firstQuestion
+        self.open = open
+    }
 
     private var pad: CGFloat { sizeClass == .regular ? Space.pageRegular : Space.pageCompact }
 
@@ -118,6 +129,9 @@ private struct AskThread: View {
 
     /// Over Google Drive the waiting is the laptop's; otherwise the library's.
     private var overDrive: Bool { app.isDrive || DebugLaunch.flag("-ask-drive") }
+
+    /// A few questions to start with, as chips over the bar (an alternative look, `-ask-chips` in a debug build).
+    private var showsChips: Bool { DebugLaunch.flag("-ask-chips") }
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -131,14 +145,14 @@ private struct AskThread: View {
                     }
                     ForEach(Array(conversation.turns.enumerated()), id: \.element.id) { i, turn in
                         TurnView(turn: turn, last: i == conversation.turns.count - 1, inScope: base,
-                                 stage: conversation.stage, overDrive: overDrive, open: open,
+                                 stage: conversation.stage, engine: engines.engine, overDrive: overDrive, open: open,
                                  retry: { retry(turn) }, askAgain: { askAgain(turn) })
                             .id(turn.id)
                     }
                     Color.clear.frame(height: 1).id("end")
                 }
                 .padding(.horizontal, pad)
-                .padding(.bottom, 16)
+                .padding(.bottom, 12)
                 .frame(maxWidth: 760 + 2 * pad)
                 .frame(maxWidth: .infinity)
             }
@@ -166,9 +180,8 @@ private struct AskThread: View {
                     made.insert(ChatSummary(id: id, title: String(title.prefix(80)), class: p.class ?? "", lecture: p.lecture ?? "",
                                             updated: ISO8601DateFormatter().string(from: .now), kind: "ask", scope: p.scope, turns: 1), at: 0)
                 }
-                Task { await loadChats() }
             }
-            .safeAreaInset(edge: .bottom) {
+            .safeAreaInset(edge: .bottom, spacing: 0) {
                 if !noAI {
                     composer {
                         guard $0, !conversation.turns.isEmpty else { return }
@@ -182,7 +195,7 @@ private struct AskThread: View {
             }
         }
         .foregroundStyle(.ink)
-        .toolbar { chatButtons }
+        .toolbar { header }
         .sheet(isPresented: $showChats) {
             ChatsSheet(place: base.place, current: conversation.chatID, made: made, recent: recent, overDrive: overDrive,
                        onOpen: { chat in
@@ -191,7 +204,6 @@ private struct AskThread: View {
                        },
                        onNew: { newChat() },
                        onDeleted: { id in
-                           chats.removeAll { $0.id == id }
                            made.removeAll { $0.id == id }
                            if id == conversation.chatID { conversation.startOver() }
                        })
@@ -204,9 +216,10 @@ private struct AskThread: View {
             #if DEBUG
             if let typing = DebugLaunch.value("-ask-typing"), isTab { question = typing }
             #endif
+            // Which AI answers: asked alongside, never in the way (a laptop that can't say yet takes a while to).
+            Task { await engines.refresh(api) }
             async let lib = try? api.library()
             async let latest = try? api.lectures(limit: 12)
-            await loadChats()
             if let lib = await lib {
                 classes = lib.classes
                 noAI = !lib.ask
@@ -217,27 +230,35 @@ private struct AskThread: View {
             // `-ask "<question>"`: asked on the Ask tab, or in the sheet `-show ask…` opens.
             let sheet = DebugLaunch.value("-show")?.hasPrefix("ask") == true
             if let q = DebugLaunch.value("-ask"), isTab != sheet, conversation.turns.last?.question != q { send(q) }
-            // `-ask-scopes`: the scope's menu open; `-ask-chats`: the Chats list, for pictures.
-            if DebugLaunch.flag("-ask-scopes"), isTab != sheet { try? await Task.sleep(for: .seconds(1)); picking = true }
+            // `-ask-chats`: the Chats list open; `-ask-open <chat id>`: that kept chat open, as if picked from Chats.
             if DebugLaunch.flag("-ask-chats"), isTab != sheet { try? await Task.sleep(for: .seconds(1)); showChats = true }
-            // `-ask-open <chat id>`: that kept chat open, as if picked from Chats.
-            if let id = DebugLaunch.value("-ask-open"), isTab != sheet, let c = chats.first(where: { $0.id == id }) { openChat(c) }
+            if let id = DebugLaunch.value("-ask-open"), isTab != sheet { openChat(id) }
             #endif
         }
     }
 
-    // MARK: Chats and New chat
+    // MARK: the header
 
-    @ToolbarContentBuilder private var chatButtons: some ToolbarContent {
-        ToolbarItemGroup(placement: isTab ? .topBarTrailing : .topBarLeading) {
-            Button { showChats = true } label: { Image(icon: "forum") }
+    @ToolbarContentBuilder private var header: some ToolbarContent {
+        ToolbarItemGroup(placement: .topBarLeading) {
+            Button { showChats = true } label: { Image(icon: "history") }
                 .accessibilityLabel("Chats")
                 .accessibilityIdentifier("ask.chats")
-            Button { newChat() } label: { Image(icon: "add") }
-                .accessibilityLabel("New chat")
-                .accessibilityIdentifier("ask.new")
-                .disabled(conversation.turns.isEmpty)
+            if !isTab { newChatButton }
         }
+        ToolbarItem(placement: .principal) {
+            AskHeader(engine: engines.engine, title: conversation.turns.isEmpty ? nil : conversation.title)
+        }
+        if isTab {
+            ToolbarItem(placement: .topBarTrailing) { newChatButton }
+        }
+    }
+
+    private var newChatButton: some View {
+        Button { newChat() } label: { Image(icon: "edit_square") }
+            .accessibilityLabel("New chat")
+            .accessibilityIdentifier("ask.new")
+            .disabled(conversation.turns.isEmpty)
     }
 
     private func newChat() {
@@ -246,94 +267,50 @@ private struct AskThread: View {
         question = ""
     }
 
-    /// The chats kept where this was opened: all of them on the Ask tab, a class's or a lecture's in its sheet.
-    private func loadChats() async {
-        guard let api = app.api, let all = try? await api.askChats() else { return }
-        made.removeAll { m in all.contains { $0.id == m.id } }
-        chats = ChatsSheet.kept(all + made, at: base.place)
-    }
-
     // MARK: before anything's asked
 
-    private var lede: String {
-        let plural = noun + "s"
-        return switch base {
-        case .everything: "Answers come from your notes and \(app.words.lectures), with the \(app.words.lecture) and the minute each one used."
-        case .class(let c): "Answers come from your \(c) notes and \(plural), with the \(noun) and the minute each one used."
-        case .lecture: "Answers come from this \(noun)'s notes and what was said in it, with the minute each one used."
-        }
-    }
-
-    /// Questions worth asking, from the student's own classes and lectures: the latest class, the last lecture by its
-    /// title, what's due.
-    private var suggestions: [String] {
-        let school = app.forSchool
-        switch scope {
-        case .lecture:
-            return ["Summarize this \(noun) in five points", "Quiz me on this \(noun)",
-                    school ? "What's most likely to be on the exam?" : "What was decided, and who's doing what?"]
-        case .class(let c):
-            let last = recent.first { $0.class == c && $0.status == "done" && !($0.title ?? "").isEmpty }
-            return ["What did we cover in \(c) this week?",
-                    last?.title.map { "Quiz me on \($0)" } ?? "Quiz me on my last \(c) \(noun)",
-                    school ? "What's due next in \(c), and which \(noun)s help?" : "What's still to do, and who's doing it?"]
-        case .everything:
-            let filed = recent.filter { ($0.class ?? "").isEmpty == false && $0.class != "Unsorted" }
-            let latest = recent.first { $0.status == "done" && !($0.title ?? "").isEmpty }
-            let cls = filed.first?.class ?? classes.first?.name
-            var out = [cls.map { "What did we cover in \($0) this week?" } ?? "What did we cover this week?",
-                       latest?.title.map { "Quiz me on \($0)" } ?? "Quiz me on my last \(app.words.lecture)"]
-            if school { out.append("What's due next, and which \(app.words.lectures) help?") }
-            if let other = filed.first(where: { $0.class != cls })?.class {
-                out.append("Explain the hardest idea from \(other) simply")
-            }
-            return out
-        }
-    }
-
+    /// The answering AI's mark and one line, in the middle of the page.
     private var start: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text(lede).textStyle(.lede).foregroundStyle(.inkMuted)
+        VStack(spacing: 16) {
+            if let engine = engines.engine {
+                BrandMark(engine, size: 44, relativeTo: .largeTitle)
+            } else {
+                StudyStashLogo(size: 48)
+            }
+            Text(emptyLine).textStyle(.title).foregroundStyle(.ink)
+                .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, isTab ? 0 : 12)
-                .padding(.bottom, 24)
-            GroupLabel("Try asking").padding(.bottom, 2)
-            ForEach(Array(suggestions.enumerated()), id: \.offset) { i, s in
-                if i > 0 { Rule() }
-                Button { send(s) } label: {
-                    HStack(spacing: 12) {
-                        Text(s).textStyle(.nav).foregroundStyle(.ink)
-                            .multilineTextAlignment(.leading)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Spacer(minLength: 8)
-                        Icon("arrow_upward", size: 16).foregroundStyle(.inkSubtle)
-                    }
-                    .padding(.vertical, 13)
-                }
-                .buttonStyle(.row)
-                .accessibilityHint("Asks it")
-            }
-            if !chats.isEmpty {
-                HStack(alignment: .lastTextBaseline) {
-                    GroupLabel("Recent chats")
-                    Spacer()
-                    Button("See all") { showChats = true }.buttonStyle(.textLink)
-                }
-                .padding(.top, 32)
-                .padding(.bottom, 2)
-                ForEach(Array(chats.prefix(3).enumerated()), id: \.element.id) { i, c in
-                    if i > 0 { Rule() }
-                    ChatRow(chat: c, about: ChatsSheet.whereWords(c, at: base.place, recent: recent)) { openChat(c) }
-                }
-            }
+        }
+        .padding(.horizontal, 24)
+        .frame(maxWidth: .infinity)
+        .containerRelativeFrame(.vertical) { height, _ in height * 0.78 }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var emptyLine: String {
+        switch base {
+        case .everything: "What do you want to know about your notes?"
+        case .class(let c): "What do you want to know about \(c)?"
+        case .lecture: "What do you want to know about this \(noun)?"
         }
     }
 
-    private func openChat(_ c: ChatSummary) {
+    /// At most three short questions, each a few words.
+    private var chips: [String] {
+        switch base {
+        case .lecture: ["Sum it up", "Quiz me", app.forSchool ? "Exam topics?" : "What was decided?"]
+        case .class: ["This week", "Quiz me", app.forSchool ? "What's due?" : "What's left to do?"]
+        case .everything: ["Sum up this week", "Quiz me", app.forSchool ? "What's due?" : "What's left to do?"]
+        }
+    }
+
+    // MARK: Chats
+
+    private func openChat(_ id: String) {
         Task {
             guard let api = app.api else { return }
             do {
-                let chat = try await api.chat(c.id)
+                let chat = try await api.chat(id)
                 withAnimation(.smooth) { conversation.open(chat) }
                 scope = base
             } catch {
@@ -342,39 +319,76 @@ private struct AskThread: View {
         }
     }
 
-    // MARK: the Ask bar
+    // MARK: the bar
 
-    /// The scopes the bar offers here, as the desktop's: a lecture, its folder by name, all notes; a folder and all
-    /// notes; or all notes and each folder.
+    /// What the bar can ask about, as its menu lists them: all notes, each class, and this lecture when it was opened
+    /// from one.
     private var choices: [AskScope] {
-        switch base {
-        case .lecture(_, _, let c): [base] + (c.map { [.class($0)] } ?? []) + [.everything]
-        case .class: [base, .everything]
-        case .everything: [.everything] + classes.map { .class($0.name) }
-        }
+        var cls = classes.map { AskScope.class($0.name) }
+        if let own = base.className, !cls.contains(.class(own)) { cls.append(.class(own)) }
+        if case .lecture = base { return [.everything] + cls + [base] }
+        return [.everything] + cls
     }
 
     private func composer(onFocus: @escaping (Bool) -> Void) -> some View {
-        AskBar(placeholder: scope.placeholder(noun: noun), text: $question,
-               scope: choices.count > 1 ? scope.label(noun: noun) : nil,
-               busy: conversation.busy, onScope: { picking = true }, onStop: { conversation.stop() },
-               focusOnAppear: DebugLaunch.value("-ask-typing") != nil && isTab, onFocus: onFocus) { send(question) }
-            .popover(isPresented: $picking, arrowEdge: .bottom) {
-                ScopeMenu(choices: choices, chosen: scope, noun: noun) { picked in
-                    scope = picked
-                    picking = false
+        VStack(alignment: .leading, spacing: 10) {
+            if showsChips && conversation.turns.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(chips, id: \.self) { c in
+                            Button { send(c) } label: {
+                                Text(c).textStyle(.buttonSmall).foregroundStyle(.ink).lineLimit(1)
+                                    .padding(.horizontal, 14)
+                                    .frame(height: 34)
+                                    .overlay(Capsule().strokeBorder(.line))
+                                    .contentShape(.capsule)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 2)
                 }
-                .presentationCompactAdaptation(.popover)
             }
-            .onChange(of: question) { old, new in
-                // The AI that will answer gets ready once a question's begun, as on the computer.
-                if old.isEmpty, !new.isEmpty, !warmed, let api = app.api { warmed = true; Task { await api.warm() } }
+            AskBar(placeholder: "Ask anything", text: $question, busy: conversation.busy, onStop: { conversation.stop() },
+                   focusOnAppear: DebugLaunch.value("-ask-typing") != nil && isTab, onFocus: onFocus) {
+                scopeMenu
+            } onSend: {
+                send(question)
             }
-            .padding(.horizontal, sizeClass == .regular ? pad : 12)
-            .padding(.top, 6)
-            .padding(.bottom, 8)
-            .frame(maxWidth: 760 + 2 * pad)
-            .frame(maxWidth: .infinity)
+            .accessibilityElement(children: .contain)
+        }
+        .onChange(of: question) { old, new in
+            // The AI that will answer gets ready once a question's begun, as on the computer.
+            if old.isEmpty, !new.isEmpty, !warmed, let api = app.api { warmed = true; Task { await api.warm() } }
+        }
+        .padding(.horizontal, sizeClass == .regular ? pad : 12)
+        .padding(.top, 8)
+        .padding(.bottom, 8)
+        .frame(maxWidth: 760 + 2 * pad)
+        .frame(maxWidth: .infinity)
+        .background(Color.surface)
+    }
+
+    /// The scope chip and its menu: a native one, the chosen with a check, each class with its highlighter.
+    private var scopeMenu: some View {
+        Menu {
+            Picker("Ask about", selection: $scope) {
+                ForEach(choices, id: \.self) { c in
+                    if case .class(let cls) = c {
+                        Label { Text(cls) } icon: { SwatchImage.of(app.hue(of: cls), dark: scheme == .dark) }.tag(c)
+                    } else {
+                        Text(c.label(noun: noun)).tag(c)
+                    }
+                }
+            }
+            .pickerStyle(.inline)
+        } label: {
+            AskScopeChip(title: scope.label(noun: noun), hue: app.hue(of: scope.className), showsSwatch: { if case .class = scope { true } else { false } }())
+        }
+        .menuOrder(.fixed)
+        .accessibilityLabel("Asking about \(scope.label(noun: noun))")
+        .accessibilityHint("Changes what it asks about")
+        .accessibilityIdentifier("ask.scope")
     }
 
     private func send(_ text: String) {
@@ -397,56 +411,34 @@ private struct AskThread: View {
     }
 }
 
-/// The scope's menu over the Ask bar, as the desktop's: each choice by name, a folder with its swatch, a check by the
-/// one asked about now.
-private struct ScopeMenu: View {
-    @Environment(AppModel.self) private var app
-    var choices: [AskScope]
-    var chosen: AskScope
-    var noun: String
-    var pick: (AskScope) -> Void
+/// The middle of Ask's header: the answering AI's mark and name; in a chat, its title over them.
+private struct AskHeader: View {
+    var engine: AskEngine?
+    var title: String?
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                GroupLabel("Ask about").padding(.horizontal, 12).padding(.top, 10).padding(.bottom, 4)
-                ForEach(choices, id: \.self) { c in
-                    Button { pick(c) } label: {
-                        HStack(spacing: 10) {
-                            if case .class(let cls) = c { Swatch(app.hue(of: cls)) }
-                            Text(c.label(noun: noun)).textStyle(.nav).fontWeight(c == chosen ? .bold : .medium)
-                                .foregroundStyle(.ink).lineLimit(1)
-                            Spacer(minLength: 16)
-                            if c == chosen { Icon("check", size: 16).foregroundStyle(.ink) }
-                        }
-                        .padding(.horizontal, 12)
-                        .frame(minHeight: 44)
-                        .contentShape(.rect)
-                    }
-                    .buttonStyle(MenuRowStyle())
-                    .accessibilityAddTraits(c == chosen ? [.isSelected] : [])
-                }
+        VStack(spacing: 1) {
+            if let title {
+                Text(title).textStyle(.buttonSmall).foregroundStyle(.ink).lineLimit(1)
             }
-            .padding(6)
+            HStack(spacing: 6) {
+                if let engine { BrandMark(engine, size: title == nil ? 18 : 12, relativeTo: title == nil ? .body : .caption) }
+                Text(engine?.name ?? "Ask")
+                    .textStyle(title == nil ? .button : .micro)
+                    .foregroundStyle(title == nil ? Color.ink : .inkMuted)
+            }
         }
-        .scrollBounceBehavior(.basedOnSize)
-        .frame(minWidth: 260, maxHeight: 420)
-        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: 230)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel([title, engine.map { "Answered by \($0.name)" }].compactMap { $0 }.joined(separator: ", "))
+        .accessibilityAddTraits(.isHeader)
     }
 }
 
-/// A menu's row: the wash while it's pressed, the control's corners.
-private struct MenuRowStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .background(configuration.isPressed ? Color.hover : .clear, in: .rect(cornerRadius: Radius.control))
-    }
-}
-
-/// One question and its answer: the question on the right on the sunken grey (no bubble colour); while there are no
-/// words yet, what's happening, by a caret; the answer in ink in the notes' type as it's written, a caret at its end;
-/// then the lectures it used, each opening at its moment, who answered, Copy and Ask again. A question with no answer
-/// says why, with Try again.
+/// One question and its answer: the question in a quiet bubble on the right; while there are no words yet, the
+/// answering AI's own thinking mark and what's happening; the answer full width in the notes' type as it's written;
+/// then the lectures it used as small chips, who answered (its mark), Copy and Ask again. A question with no answer
+/// says why in one line, with Try again.
 private struct TurnView: View {
     @Environment(AppModel.self) private var app
     @Environment(\.accessibilityReduceMotion) private var still
@@ -456,6 +448,8 @@ private struct TurnView: View {
     /// Where the thread is: a class's own Ask doesn't name the class on every question.
     var inScope: AskScope
     var stage: AskStage
+    /// The AI answering now (for the thinking mark).
+    var engine: AskEngine?
     var overDrive: Bool
     var open: (AskTurn.Source, Double?) -> Void
     var retry: () -> Void
@@ -472,24 +466,26 @@ private struct TurnView: View {
     private var asking: Bool { turn.state == .asking }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 14) {
             question
 
             if asking && turn.answer.isEmpty {
                 waiting
             } else if !turn.answer.isEmpty {
-                MarkdownText(shownAnswer, style: .lede, caret: asking || pacing)
+                MarkdownText(shownAnswer, style: .lede)
                     .accessibilityElement(children: .combine)
+                if asking || pacing {
+                    ThinkingMark(engine: engine, size: 18).padding(.top, -4)
+                }
             }
 
             if turn.state == .failed, let p = turn.problem {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Icon("warning", size: 16).foregroundStyle(.inkSubtle)
+                VStack(alignment: .leading, spacing: 10) {
                     Text(p).textStyle(.body).foregroundStyle(.inkMuted).fixedSize(horizontal: false, vertical: true)
+                    Button("Try again", action: retry)
+                        .buttonStyle(.pill(small: true))
+                        .accessibilityIdentifier("ask.retry")
                 }
-                Button("Try again", action: retry)
-                    .buttonStyle(.pill(small: true))
-                    .accessibilityIdentifier("ask.retry")
             }
 
             if turn.state == .done && !pacing {
@@ -498,16 +494,16 @@ private struct TurnView: View {
                 }
                 let sources = turn.sources.filter { $0.id != nil }
                 if !sources.isEmpty {
-                    VStack(alignment: .leading, spacing: 0) {
+                    FlowLayout(spacing: 8) {
                         ForEach(Array(sources.enumerated()), id: \.offset) { _, s in
-                            SourceLink(source: s) { open(s, s.times.first) }
+                            SourceChip(source: s) { open(s, s.times.first) }
                         }
                     }
                 }
                 footer
             }
         }
-        .padding(.vertical, 16)
+        .padding(.vertical, 14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .onAppear {
             // Written while it's on screen: paced. Read back (an earlier turn, a chat opened): all at once.
@@ -519,7 +515,7 @@ private struct TurnView: View {
             slow = false
             guard asking, turn.answer.isEmpty else { return }
             // (`-ask-waiting`, for pictures: at once.)
-            try? await Task.sleep(for: .seconds(DebugLaunch.flag("-ask-waiting") ? 1 : 6))
+            try? await Task.sleep(for: .seconds(DebugLaunch.flag("-ask-waiting") ? 1 : 8))
             if !Task.isCancelled { slow = true }
         }
         .onChange(of: turn.state) { old, new in
@@ -558,50 +554,49 @@ private struct TurnView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .textSelection(.enabled)
                 .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(.surfaceSunken, in: .rect(cornerRadius: 16))
+                .padding(.vertical, 9)
+                .background(.surfaceSunken, in: .rect(cornerRadius: 18, style: .continuous))
             if case .class(let c)? = turn.asked, inScope != turn.asked {
                 Highlight(c, hue: app.hue(of: c))
             }
         }
-        .padding(.leading, 48)
+        .padding(.leading, 56)
         .frame(maxWidth: .infinity, alignment: .trailing)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("You asked: \(turn.question)")
     }
 
-    /// No words yet: what's happening, as far as the phone can see.
+    /// No words yet: the AI's own thinking mark and what's happening, as far as the phone can see.
     private var waiting: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 10) {
-                WritingCaret()
-                Text(stage.words(overDrive: overDrive)).textStyle(.lede).foregroundStyle(.inkMuted)
+                ThinkingMark(engine: engine, size: 22)
+                Text(stage.words(overDrive: overDrive)).textStyle(.body).foregroundStyle(.inkMuted)
                     .contentTransition(.opacity)
                     .animation(.smooth, value: stage)
             }
             if slow && overDrive {
-                Text("Answers come through your Google Drive, so the first words take a few seconds.")
+                Text("Google Drive takes a few seconds.")
                     .textStyle(.meta).foregroundStyle(.inkSubtle)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.leading, 12)
+                    .padding(.leading, 32)
                     .transition(.opacity)
             }
         }
-        .padding(.vertical, 2)
         .animation(.smooth, value: slow)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.updatesFrequently)
         .accessibilityIdentifier("ask.waiting")
     }
 
-    /// Who answered (or that it was stopped), Copy and Ask again.
+    /// Who answered (its mark and name, or that it was stopped), Copy and Ask again.
     private var footer: some View {
-        HStack(spacing: 2) {
-            if turn.stopped == true {
+        let by = turn.answeredBy
+        return HStack(spacing: 6) {
+            if let by { BrandMark(by, size: 14, relativeTo: .caption) }
+            if let name = turn.engine.flatMap({ $0.isEmpty ? nil : $0 }) ?? by?.name {
+                Text(turn.stopped == true ? "\(name) · Stopped" : name).textStyle(.micro).foregroundStyle(.inkSubtle)
+            } else if turn.stopped == true {
                 Text("Stopped").textStyle(.micro).foregroundStyle(.inkSubtle)
-            } else if let engine = turn.engine, !engine.isEmpty {
-                Text(engine).textStyle(.micro).foregroundStyle(.inkSubtle)
-                    .accessibilityLabel("Answered by \(engine)")
             }
             Spacer(minLength: 8)
             if !turn.answer.isEmpty {
@@ -610,73 +605,55 @@ private struct TurnView: View {
                     didCopy = true
                     AccessibilityNotification.Announcement("Copied").post()
                     Task { try? await Task.sleep(for: .seconds(2)); didCopy = false }
-                } label: {
-                    Label(didCopy ? "Copied" : "Copy", icon: didCopy ? "check" : "content_copy")
-                }
-                .buttonStyle(AnswerActionStyle())
+                } label: { Icon(didCopy ? "check" : "content_copy", size: 17) }
+                .buttonStyle(QuietIconStyle())
                 .accessibilityLabel(didCopy ? "Copied" : "Copy the answer")
             }
-            Button(action: askAgain) { Label("Ask again", icon: "refresh") }
-                .buttonStyle(AnswerActionStyle())
+            Button(action: askAgain) { Icon("refresh", size: 17) }
+                .buttonStyle(QuietIconStyle())
+                .accessibilityLabel("Ask again")
                 .accessibilityIdentifier("ask.again")
         }
-        .padding(.top, 2)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(turn.stopped == true ? "Stopped" : by.map { "Answered by \($0.name)" } ?? "Answer")
     }
 }
 
-/// Copy and Ask again under an answer: a small icon and words, muted, washed while pressed.
-private struct AnswerActionStyle: ButtonStyle {
-    @ScaledMetric(relativeTo: .footnote) private var size: CGFloat = 15
-    @Environment(\.isEnabled) private var enabled
-
+/// Copy and Ask again under an answer: a small icon in the subtle ink, a finger's room round it, washed while pressed.
+private struct QuietIconStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .labelStyle(ActionLabel(size: size))
-            .textStyle(.meta)
-            .foregroundStyle(configuration.isPressed ? Color.ink : .inkMuted)
-            .padding(.horizontal, 8)
-            .frame(minHeight: 32)
+            .foregroundStyle(configuration.isPressed ? Color.ink : .inkSubtle)
+            .frame(width: 36, height: 32)
             .background(configuration.isPressed ? Color.press : .clear, in: .rect(cornerRadius: Radius.control))
             .contentShape(.rect(cornerRadius: Radius.control))
-            .opacity(enabled ? 1 : 0.4)
-    }
-
-    private struct ActionLabel: LabelStyle {
-        var size: CGFloat
-        func makeBody(configuration: Configuration) -> some View {
-            HStack(spacing: 5) {
-                configuration.icon.scaleEffect(size / 24).frame(width: size, height: size)
-                configuration.title
-            }
-        }
     }
 }
 
-/// A lecture an answer came from, as a small link: its class's swatch, its title and the moments it drew on
-/// ("3:40, 21:30"). It opens the lecture at the first.
-private struct SourceLink: View {
+/// A lecture an answer came from, as a small chip: its class's swatch, its title, the moment it drew on ("3:40").
+/// It opens the lecture there.
+private struct SourceChip: View {
     @Environment(AppModel.self) private var app
     var source: AskTurn.Source
     var open: () -> Void
 
     var body: some View {
         Button(action: open) {
-            HStack(alignment: .firstTextBaseline, spacing: 9) {
+            HStack(spacing: 6) {
                 Swatch(app.hue(of: source.class), small: true)
                 Text(title).textStyle(.meta).foregroundStyle(.ink).lineLimit(1)
-                Spacer(minLength: 8)
-                if let at {
-                    Text(at).textStyle(.meta).foregroundStyle(.inkSubtle).monospacedDigit().lineLimit(1).fixedSize()
-                }
-                Icon("arrow_outward", size: 14, relativeTo: .footnote).foregroundStyle(.inkSubtle)
+                if let at { Text(at).textStyle(.meta).foregroundStyle(.inkSubtle).monospacedDigit().fixedSize() }
             }
-            .padding(.vertical, 8)
-            .frame(minHeight: 36)
-            .contentShape(.rect)
+            .padding(.horizontal, 10)
+            .frame(minHeight: 32)
+            .frame(maxWidth: 300, alignment: .leading)
+            .background(.surfaceSunken, in: .rect(cornerRadius: Radius.control))
+            .overlay(RoundedRectangle(cornerRadius: Radius.control).strokeBorder(.line))
+            .contentShape(.rect(cornerRadius: Radius.control))
         }
-        .buttonStyle(.row)
+        .buttonStyle(SourceChipStyle())
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(at.map { "\(title), at \($0)" } ?? title)
+        .accessibilityLabel(source.times.isEmpty ? title : "\(title), at \(source.times.map(Format.clock).joined(separator: ", "))")
         .accessibilityIdentifier("ask.source")
         .accessibilityHint(source.times.isEmpty ? "Opens it" : "Opens it at \(Format.clock(source.times[0]))")
     }
@@ -686,9 +663,14 @@ private struct SourceLink: View {
         return Nouns.untitled(folder: source.class, date: source.date)
     }
 
-    /// The moments it drew on ("3:40, 21:30"), or the part of the notes ("Key points").
-    private var at: String? {
-        let times = source.times.prefix(3).map(Format.clock)
-        return times.isEmpty ? source.section : times.joined(separator: ", ")
+    /// The first moment it drew on ("3:40"), or the part of the notes ("Key points").
+    private var at: String? { source.times.first.map(Format.clock) ?? source.section }
+}
+
+private struct SourceChipStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label.overlay {
+            if configuration.isPressed { RoundedRectangle(cornerRadius: Radius.control).fill(.press).allowsHitTesting(false) }
+        }
     }
 }

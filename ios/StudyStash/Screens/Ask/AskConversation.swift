@@ -32,11 +32,16 @@ struct AskTurn: Codable, Identifiable, Hashable, Sendable {
     var sources: [Source] = []
     var state: State = .asking
     var problem: String?
+    /// The AI that wrote it, by name ("Claude") and by the library's id ("claude").
     var engine: String?
+    var engineID: String?
     /// "This answer came from Ollama. Claude didn't respond in time."
     var note: String?
     /// Stopped by the student partway (what came by then is the answer).
     var stopped: Bool?
+
+    /// The AI that wrote it, as a mark can show it.
+    var answeredBy: AskEngine? { AskEngine(id: engineID) ?? AskEngine(name: engine) }
 
     /// One source a lecture, however many of its sections the answer drew on, in the order they came; a lecture's
     /// moments gathered, earliest first.
@@ -258,9 +263,12 @@ final class AskConversation {
                         if !reply.answer.isEmpty { $0.answer = reply.answer }
                         $0.sources = AskTurn.merged(reply.sources)
                         $0.engine = reply.engineName
+                        $0.engineID = reply.engine
                         if reply.fellBack { $0.note = "This answer came from \(reply.engineName). \(reply.why)".trimmingCharacters(in: .whitespaces) }
                         $0.state = .done
                     }
+                    // Who answered: the mark shown from now on, until the library says otherwise.
+                    if !reply.fellBack { AskEngineWatch.shared.heard(AskEngine(id: reply.engine) ?? AskEngine(name: reply.engineName)) }
                     if let kept = reply.chat {
                         chatID = kept
                         keeps = true
@@ -367,6 +375,7 @@ final class AskConversation {
                 t.answer = a.text
                 t.sources = AskTurn.merged(a.sources ?? [])
                 t.engine = a.engineName
+                t.engineID = a.engine
                 t.stopped = a.stopped == true ? true : nil
             }
             out.append(t)

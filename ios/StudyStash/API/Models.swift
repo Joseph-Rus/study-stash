@@ -154,6 +154,8 @@ struct AskSource: Codable, Sendable, Hashable {
 struct AskReply: Codable, Sendable {
     var answer: String
     var sources: [AskSource]
+    /// The AI that wrote it, by the library's id ("claude", "codex", "gemini", "ollama").
+    var engine: String?
     var engineName: String
     var fellBack: Bool
     var why: String
@@ -162,7 +164,7 @@ struct AskReply: Codable, Sendable {
     var chat: String?
 
     enum CodingKeys: String, CodingKey {
-        case answer, sources, why, chat
+        case answer, sources, why, chat, engine
         case engineName = "engine_name"
         case fellBack = "fell_back"
     }
@@ -236,11 +238,12 @@ struct ChatMessage: Codable, Sendable, Hashable {
     var failed: Bool?
     /// An Ask answer's sources, the AI that wrote it, and whether it was stopped partway.
     var sources: [AskSource]?
+    var engine: String?
     var engineName: String?
     var stopped: Bool?
 
     enum CodingKeys: String, CodingKey {
-        case role, text, when, tools, failed, sources, stopped
+        case role, text, when, tools, failed, sources, stopped, engine
         case engineName = "engine_name"
     }
 }
@@ -263,6 +266,14 @@ struct ChatEvent: Codable, Sendable {
     var kind: String?
     var text: String?
     var name: String?
+}
+
+/// GET /api/v2/ai: which AI does each job. Only Ask's is read here (`jobs.ask.provider`); it holds no secrets.
+struct AISettings: Decodable, Sendable {
+    struct Job: Decodable, Sendable { var provider: String }
+    /// The library's AI, when a job has none of its own.
+    var provider: String?
+    var jobs: [String: Job]?
 }
 
 /// One assignment on the Due list. `due` is local time without an offset.

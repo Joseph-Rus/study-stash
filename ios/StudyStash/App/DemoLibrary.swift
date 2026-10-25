@@ -119,8 +119,20 @@ final class DemoLibrary: URLProtocol, @unchecked Sendable {
             return json(c.whole)
         case ("DELETE", _) where path.hasPrefix("/api/v2/chats/"):
             let id = String(path.dropFirst("/api/v2/chats/".count))
-            chats.withLock { $0.removeAll { $0.id == id } }
+            chats.withLock { all in
+                if let i = all.firstIndex(where: { $0.id == id }) { trashedChats.withLock { $0.append(all.remove(at: i)) } }
+            }
             return json(["deleted": id])
+        case ("POST", _) where path.hasPrefix("/api/v2/chats/") && path.hasSuffix("/restore"):
+            let id = String(path.dropFirst("/api/v2/chats/".count).dropLast("/restore".count))
+            guard let back = trashedChats.withLock({ t in t.firstIndex { $0.id == id }.map { t.remove(at: $0) } }) else {
+                return json(["detail": "It's no longer kept, so it can't come back."], 404)
+            }
+            chats.withLock { $0.append(back) }
+            return json(back.listed)
+        case ("GET", "/api/v2/ai"):
+            // Which AI answers (`-ask-engine` in a debug build; Claude otherwise).
+            return json(["provider": answeringEngine.id, "jobs": ["ask": ["provider": answeringEngine.id, "model": "", "own": false]], "providers": []])
         case ("POST", "/api/v2/ai/ask"):
             return ask(sent["question"] as? String ?? "", lecture: sent["lecture"] as? String)
         case ("POST", "/api/v2/ai/warm"):
@@ -389,8 +401,9 @@ final class DemoLibrary: URLProtocol, @unchecked Sendable {
                 throw error
             }
             if let chat { keep(chat, ask.question, answer, sources: sources, stopped: false) }
-            var reply: [String: Any] = ["answer": answer, "sources": sources, "engine": "claude", "engine_name": "Claude", "asked": "claude",
-                                        "asked_name": "Claude", "fell_back": false, "why": ""]
+            let (engine, name) = answeringEngine
+            var reply: [String: Any] = ["answer": answer, "sources": sources, "engine": engine, "engine_name": name, "asked": engine,
+                                        "asked_name": name, "fell_back": false, "why": ""]
             if let chat { reply["chat"] = chat }
             send(["kind": "done", "reply": reply])
             client.client?.urlProtocolDidFinishLoading(client.owner)
@@ -460,8 +473,8 @@ final class DemoLibrary: URLProtocol, @unchecked Sendable {
                 var o: [String: Any] = ["role": m.role, "text": m.text, "when": m.when]
                 if m.role == "assistant" {
                     o["sources"] = (try? JSONSerialization.jsonObject(with: m.sources)) ?? []
-                    o["engine"] = "claude"
-                    o["engine_name"] = "Claude"
+                    o["engine"] = answeringEngine.id
+                    o["engine_name"] = answeringEngine.name
                     o["stopped"] = m.stopped
                     o["failed"] = false
                 }
@@ -480,6 +493,18 @@ final class DemoLibrary: URLProtocol, @unchecked Sendable {
     }
 
     static let chats = Mutex<[DemoChat]>(seededChats)
+    /// Deleted, for Undo.
+    static let trashedChats = Mutex<[DemoChat]>([])
+
+    /// The AI the demo says answers: Claude, or in a debug build `-ask-engine claude|codex|gemini|ollama`.
+    static var answeringEngine: (id: String, name: String) {
+        switch DebugLaunch.value("-ask-engine") {
+        case "codex", "chatgpt": ("codex", "ChatGPT")
+        case "gemini": ("gemini", "Gemini")
+        case "ollama": ("ollama", "Ollama")
+        default: ("claude", "Claude")
+        }
+    }
 
     /// The chat a question goes on: the one named, or a new one where it was asked.
     static func keptChat(_ id: String, place: [String: String], first: String) -> String {

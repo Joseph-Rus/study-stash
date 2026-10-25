@@ -163,6 +163,17 @@ import Testing
         }
     }
 
+    /// Which AI answers Ask: the library's `GET /ai` says it by its id ("codex" is ChatGPT); an answer by its name.
+    @Test func theAnsweringAIIsReadFromTheLibrary() throws {
+        let s = try decode("""
+        {"provider":"claude","jobs":{"notes":{"provider":"claude","model":"","own":false},"ask":{"provider":"codex","model":"gpt-5","own":true}},
+         "providers":[{"id":"claude","name":"Claude","installed":true,"site":"","test":"","models":[]}]}
+        """, as: AISettings.self)
+        #expect(AskEngine(id: s.jobs?["ask"]?.provider) == .chatgpt)
+        #expect(AskEngine(id: "gemini") == .gemini && AskEngine(id: "ollama") == .ollama && AskEngine(id: "something") == nil)
+        #expect(AskEngine(name: "Local model (Ollama)") == .ollama && AskEngine(name: "Claude") == .claude)
+    }
+
     /// A chat picked from Chats opens as it was: each question with its answer and sources, a failed one with why.
     @Test @MainActor func aKeptChatOpensAsItsTurns() throws {
         let chat = try decode("""

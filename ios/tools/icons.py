@@ -38,6 +38,8 @@ PHONE_NAMES = {
     "grid_view": "layout-grid",               # a notebook: its pages
     "pan_tool": "hand",                       # a notebook: draw with a finger
     "arrow_downward": "arrow-down",           # a notebook: move a page later
+    "history": "history",                     # Ask: the chats before
+    "edit_square": "square-pen",              # Ask: a new chat
 }
 
 

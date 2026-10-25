@@ -1,9 +1,9 @@
 import XCTest
 
 /// Ask with real taps on the demo library, on what could really break for a student: the bar empties when a question
-/// is sent (by Send or by Return), Stop stops the answer and keeps what came, and a past chat opens from Chats to
-/// carry on. (A source opening its lecture at the moment is in JourneyTests.) `-ask-pace slow` writes the demo's
-/// answer a word at a time, so there's time to stop it.
+/// is sent (by Send or by Return), Stop stops the answer and keeps what came, a past chat opens from Chats to carry
+/// on, and Undo brings back a deleted one. (A source opening its lecture at the moment is in JourneyTests.)
+/// `-ask-pace slow` writes the demo's answer a word at a time, so there's time to stop it.
 @MainActor
 final class AskTests: XCTestCase {
     override func setUp() async throws {
@@ -26,7 +26,7 @@ final class AskTests: XCTestCase {
 
         // While it's written, Send is Stop; stopped, what came stays and says so, and Send is back.
         tap(app.buttons["ask.stop"], "Stop", timeout: 10)
-        expect(app.staticTexts["Stopped"], "the answer said to be stopped")
+        expect(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Stopped")).firstMatch, "the answer said to be stopped")
         expect(app.buttons["ask.send"], "Send again after Stop")
         XCTAssertFalse(app.buttons["ask.stop"].exists, "no Stop once it's stopped")
 
@@ -38,6 +38,7 @@ final class AskTests: XCTestCase {
         XCTAssertFalse(text(of: field).contains("Quiz me"), "the bar is empty after Return (it said \(text(of: field)))")
     }
 
+    /// A past chat opens from Chats; New chat empties the page; a chat deleted with a swipe comes back with Undo.
     func testAPastChatOpensFromChatsAndNewChatStartsAgain() {
         let app = XCUIApplication()
         app.launchArguments = ["-demo", "-quiet", "-ask-new"]
@@ -50,7 +51,17 @@ final class AskTests: XCTestCase {
                "the chat's question in the thread")
         expect(app.buttons["ask.source"].firstMatch, "its answer's source")
         tap(app.buttons["ask.new"], "New chat")
-        expect(app.staticTexts["Try asking"], "the empty page after New chat")
+        expect(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "What do you want to know")).firstMatch,
+               "the empty page after New chat")
+
+        tap(app.buttons["ask.chats"], "Chats again")
+        let memory = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Which lectures talk about memory?")).firstMatch
+        expect(memory, "a chat to delete")
+        memory.swipeLeft()
+        tap(app.buttons["Delete"], "the swipe's Delete")
+        XCTAssertTrue(memory.waitForNonExistence(timeout: 5), "the chat out of the list")
+        tap(app.buttons["chats.undo"], "Undo")
+        expect(memory, "the chat back after Undo")
     }
 
     /// What's in a text field (its placeholder when it's empty).

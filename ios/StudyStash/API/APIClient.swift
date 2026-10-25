@@ -285,6 +285,16 @@ final class APIClient: Sendable {
     func chat(_ id: String) async throws -> Chat { try await get("/chats/\(Self.segment(id))") }
     func deleteChat(_ id: String) async throws { try await delete("/chats/\(Self.segment(id))") }
 
+    /// A deleted chat back (Undo), while the library still keeps it.
+    func restoreChat(_ id: String) async throws {
+        struct Empty: Encodable {}
+        struct Any_: Decodable {}
+        let _: Any_ = try await post("/chats/\(Self.segment(id))/restore", Empty())
+    }
+
+    /// Which AI does each job (Ask's is the one answering here).
+    func aiSettings() async throws -> AISettings { try await get("/ai") }
+
     struct ChatBody: Encodable { var message: String; var chat: String?; var `class`: String?; var lecture: String?; var edit = false }
 
     func sendChat(_ message: String, chat: String?, class cls: String? = nil, lecture: String? = nil) async throws -> AsyncThrowingStream<ChatEvent, Error> {

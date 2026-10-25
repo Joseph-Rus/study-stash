@@ -2,8 +2,8 @@ import SwiftUI
 
 // Chats, as the desktop's Chats list has them (AiChatsMenu): the conversations kept where Ask was opened, newest
 // first, each named for its first question, with when it was last added to and what it's about. One picked opens to
-// carry on; New chat starts another; a swipe deletes one (on the computer too). The Ask tab lists them all, the computer's
-// included; a class's Ask its own and its lectures'; a lecture's its own.
+// carry on; New chat starts another; a swipe deletes one (on the computer too), with Undo. The Ask tab lists them
+// all, the computer's included; a class's Ask its own and its lectures'; a lecture's its own.
 
 /// A kept chat in a list: its first question, then "Yesterday 8:40 PM · Organic Chemistry".
 struct ChatRow: View {
@@ -68,30 +68,53 @@ struct ChatsSheet: View {
     @State private var chats: [ChatSummary]?
     @State private var problem: String?
     @State private var opening: String?
-    @State private var deleting: ChatSummary?
+    /// The chat just deleted, while Undo can bring it back.
+    @State private var deleted: ChatSummary?
     @State private var toast: String?
 
     var body: some View {
         NavigationStack {
-            Group {
-                if let chats, !chats.isEmpty {
-                    list(chats)
-                } else if chats != nil {
-                    ScrollView {
-                        EmptyText("No chats yet. Each conversation you start in Ask is kept here, and on your computer too.")
-                            .padding(.horizontal, Space.pageCompact)
-                            .padding(.top, 8)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(spacing: 0) {
+                // Undo, at the top under the bar (a sheet at half height has its foot out of sight).
+                if let d = deleted {
+                    HStack(spacing: 14) {
+                        Text("Chat deleted.").font(.atkinson(14.5, .medium, relativeTo: .subheadline)).foregroundStyle(.ink)
+                        Button("Undo") { Task { await restore(d) } }
+                            .buttonStyle(.textLink)
+                            .accessibilityIdentifier("chats.undo")
                     }
-                } else if let problem {
-                    ScrollView {
-                        EmptyState(title: overDrive ? "Can't reach your laptop" : "Can't reach your library", detail: problem, actionTitle: "Try again") {
-                            Task { await load() }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 11)
+                    .background(.surface, in: .rect(cornerRadius: Radius.panel))
+                    .lifted(.float, in: RoundedRectangle(cornerRadius: Radius.panel))
+                    .padding(.top, 8)
+                    .padding(.bottom, 4)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .task(id: d.id) {
+                        try? await Task.sleep(for: .seconds(6))
+                        withAnimation { if deleted?.id == d.id { deleted = nil } }
+                    }
+                }
+                Group {
+                    if let chats, !chats.isEmpty {
+                        list(chats)
+                    } else if chats != nil {
+                        ScrollView {
+                            EmptyText("No chats yet. Each conversation you start in Ask is kept here, and on your computer too.")
+                                .padding(.horizontal, Space.pageCompact)
+                                .padding(.top, 8)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                         }
-                        .padding(.horizontal, Space.pageCompact)
+                    } else if let problem {
+                        ScrollView {
+                            EmptyState(title: overDrive ? "Can't reach your laptop" : "Can't reach your library", detail: problem, actionTitle: "Try again") {
+                                Task { await load() }
+                            }
+                            .padding(.horizontal, Space.pageCompact)
+                        }
+                    } else {
+                        ProgressView().tint(.inkSubtle).frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
-                } else {
-                    ProgressView().tint(.inkSubtle).frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
             .page()
@@ -103,19 +126,14 @@ struct ChatsSheet: View {
                     Button {
                         onNew()
                         dismiss()
-                    } label: { Label("New chat", icon: "add") }
+                    } label: { Label("New chat", icon: "edit_square") }
                     .accessibilityIdentifier("chats.new")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { dismiss() } label: { Text("Done").textStyle(.button) }
                 }
             }
-            .confirmationDialog("Delete this chat?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
-                                titleVisibility: .visible, presenting: deleting) { c in
-                Button("Delete", role: .destructive) { Task { await delete(c) } }
-            } message: { _ in
-                Text(overDrive ? "It's deleted on your laptop too." : "It's deleted from your library too.")
-            }
+            .animation(.smooth, value: deleted?.id)
             .toast($toast)
         }
         .presentationDetents([.medium, .large])
@@ -133,7 +151,7 @@ struct ChatsSheet: View {
                 .listRowSeparatorTint(.line)
                 .listRowInsets(EdgeInsets(top: 0, leading: Space.pageCompact, bottom: 0, trailing: Space.pageCompact))
                 .swipeActions(edge: .trailing) {
-                    Button(role: .destructive) { deleting = c } label: { Label("Delete", icon: "delete") }
+                    Button(role: .destructive) { Task { await delete(c) } } label: { Label("Delete", icon: "delete") }
                 }
             }
         }
@@ -147,6 +165,10 @@ struct ChatsSheet: View {
             let all = try await api.askChats()
             chats = Self.kept(all + made.filter { m in !all.contains { $0.id == m.id } }, at: place)
             problem = nil
+            #if DEBUG
+            // `-ask-undo`: the newest deleted, for a picture of Undo.
+            if DebugLaunch.flag("-ask-undo"), deleted == nil, let first = chats?.first { await delete(first) }
+            #endif
         } catch {
             if chats == nil { problem = (error as? APIError)?.detail ?? "Your chats couldn't be loaded." }
         }
@@ -165,17 +187,40 @@ struct ChatsSheet: View {
         }
     }
 
+    /// Deleted at once, with Undo for a few seconds (the library keeps a deleted chat a day).
     private func delete(_ c: ChatSummary) async {
         guard let api = app.api else { return }
         // Out of the list at once: over Google Drive the laptop deletes it when it next looks.
-        chats?.removeAll { $0.id == c.id }
+        withAnimation { chats?.removeAll { $0.id == c.id } }
+        deleted = c
         onDeleted(c.id)
         do {
             try await api.deleteChat(c.id)
         } catch let e as APIError where e.status == 404 {
             // Gone already.
         } catch {
-            if !overDrive { toast = (error as? APIError)?.detail ?? "That chat couldn't be deleted." }
+            if !overDrive {
+                deleted = nil
+                toast = (error as? APIError)?.detail ?? "That chat couldn't be deleted."
+            }
+        }
+    }
+
+    /// Undo: the chat back in the list at once, and in the library (over Google Drive, when the laptop next looks).
+    /// A library that can't (an older one, or a day gone) says so, and it leaves the list again.
+    private func restore(_ c: ChatSummary) async {
+        guard let api = app.api else { return }
+        withAnimation {
+            deleted = nil
+            if chats?.contains(where: { $0.id == c.id }) == false { chats = Self.kept((chats ?? []) + [c], at: place) }
+        }
+        do {
+            try await api.restoreChat(c.id)
+        } catch let e as APIError where [403, 404, 405].contains(e.status) {
+            withAnimation { chats?.removeAll { $0.id == c.id } }
+            toast = "That chat couldn't come back."
+        } catch {
+            // Not answered yet: over Google Drive it waits in the phone's box until the laptop does it.
         }
     }
 
