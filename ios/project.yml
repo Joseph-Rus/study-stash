@@ -49,8 +49,8 @@ targets:
         # for bundle app.studystash.ios in project study-stash-app, and the same id turned round (Google's redirect
         # scheme for it). Not secret: every copy of the app carries it. Both are placeholders until the client is
         # made; while they are, Continue with Google says it isn't set up in this copy.
-        GOOGLE_IOS_CLIENT_ID: 1073354844610-replace-me.apps.googleusercontent.com
-        GOOGLE_IOS_URL_SCHEME: com.googleusercontent.apps.1073354844610-replace-me
+        GOOGLE_IOS_CLIENT_ID: 1073354844610-f1atouke3snqb1e2u6eqffnv8hiskj5k.apps.googleusercontent.com
+        GOOGLE_IOS_URL_SCHEME: com.googleusercontent.apps.1073354844610-f1atouke3snqb1e2u6eqffnv8hiskj5k
     info:
       path: StudyStash/Info.plist
       properties:
