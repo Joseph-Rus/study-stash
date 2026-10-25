@@ -17,6 +17,7 @@ struct SettingsTab: View {
     @State private var me: Me?
     @State private var reach: Reach = .checking
     @State private var confirming = false
+    @State private var signingOut = false
     @State private var showUses = false
     @State private var debugOpened = false
 
@@ -35,7 +36,7 @@ struct SettingsTab: View {
                     appearanceSection.id(Part.appearance)
                     reminders.id(Part.reminders)
                     uses.id(Part.uses)
-                    if !demo { thisPhone.id(Part.phone) }
+                    if !demo && !app.isDrive { thisPhone.id(Part.phone) }
                     about.id(Part.about)
                 }
                 .foregroundStyle(.ink)
@@ -66,6 +67,11 @@ struct SettingsTab: View {
             }
             #endif
         }
+        .confirmationDialog("Sign out of Google on this \(device)?", isPresented: $signingOut, titleVisibility: .visible) {
+            Button("Sign out", role: .destructive) { Task { await app.signOutOfGoogle() } }
+        } message: {
+            Text("This \(device) stops reading your library until you continue with Google again. Recordings not sent yet stay on it.")
+        }
         .confirmationDialog("Remove this \(device) from \(app.libraryName)?", isPresented: $confirming, titleVisibility: .visible) {
             Button("Remove this \(device)", role: .destructive) { Task { await app.forget() } }
         } message: {
@@ -78,6 +84,11 @@ struct SettingsTab: View {
         #if DEBUG
         if DebugLaunch.flag("-unreachable") { reach = .unreachable; return }
         #endif
+        // Over Google, the laptop's file says when it was last there; read it fresh.
+        if app.isDrive {
+            try? await DriveLibrary.link?.refresh()
+            return
+        }
         guard let api = app.api else { reach = .unreachable; return }
         do {
             me = try await api.me()
@@ -123,6 +134,8 @@ struct SettingsTab: View {
                     .padding(16)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
+            } else if app.isDrive {
+                googleLibrary
             } else {
                 SettingsBox {
                     LinkPicture(device: device, name: deviceName, library: libraryName, computer: computer, reach: reach)
@@ -155,6 +168,62 @@ struct SettingsTab: View {
     }
 
     private var libraryName: String { me?.library.name ?? app.libraryName }
+
+    // MARK: - Your library, over Google
+
+    /// Connected through Google Drive: the phone and the laptop, the account, when the laptop was last there, and Sign
+    /// out.
+    private var googleLibrary: some View {
+        let d = app.drive
+        let laptop = d?.laptop ?? app.libraryName
+        return Group {
+            SettingsBox {
+                LinkPicture(device: device, name: nil, library: laptop, computer: nil, reach: laptopReach, libraryIcon: "laptop_mac",
+                            via: "Google Drive")
+                    .padding(.horizontal, 12)
+                    .padding(.top, 18)
+                    .padding(.bottom, 14)
+                SettingsRowRule()
+                SettingsRow(title: laptop, detail: laptopDetail) {
+                    if laptopReach == .connected { Text("Connected").textStyle(.body).foregroundStyle(.ink).fixedSize() }
+                }
+                SettingsRowRule()
+                SettingsRow(title: "Google account") { Value(d?.email ?? "") }
+                SettingsRowRule()
+                Button { signingOut = true } label: {
+                    SettingsRow(title: "Sign out of Google") { EmptyView() }
+                }
+                .buttonStyle(SettingsRowButtonStyle())
+            }
+            if let waiting = d?.waiting, waiting > 0 {
+                Say(waiting == 1 ? "One change from this \(device) is on its way to your laptop. It's made when your laptop is on."
+                    : "\(waiting) changes from this \(device) are on their way to your laptop. They're made when your laptop is on.")
+            }
+            Say("Your notes reach this \(device) through a private Study Stash folder in your Google Drive that only Study Stash can see.")
+        }
+    }
+
+    /// The laptop's there if it said so in the last 3 minutes (it does every minute while it runs).
+    private var laptopReach: Reach {
+        guard let seen = app.drive?.seen else { return .checking }
+        return Date.now.timeIntervalSince(seen) < 180 ? .connected : .unreachable
+    }
+
+    /// "Study Stash 0.17.3", or when it's away, "Your laptop was last here 3 hours ago."
+    private var laptopDetail: String {
+        let version = app.drive?.version.flatMap { $0.isEmpty ? nil : "Study Stash \($0)" } ?? ""
+        guard let seen = app.drive?.seen, laptopReach != .connected else { return version }
+        return "Your laptop was last here \(Self.ago(seen)). New notes show when it's on."
+    }
+
+    /// "3 hours ago", "2 days ago", "a minute ago".
+    static func ago(_ d: Date, now: Date = .now) -> String {
+        let s = max(0, now.timeIntervalSince(d))
+        func words(_ n: Int, _ unit: String) -> String { n == 1 ? "a\(unit == "hour" ? "n" : "") \(unit) ago" : "\(n) \(unit)s ago" }
+        if s < 3600 { return words(max(1, Int(s / 60)), "minute") }
+        if s < 86_400 { return words(Int(s / 3600), "hour") }
+        return words(Int(s / 86_400), "day")
+    }
 
     private var libraryDetail: String {
         switch reach {
@@ -458,6 +527,9 @@ private struct LinkPicture: View {
     var library: String
     var computer: String?
     var reach: SettingsTab.Reach
+    var libraryIcon = "dns"
+    /// What joins them, said under the line ("Google Drive"); nil for a direct line (Tailscale).
+    var via: String?
 
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
@@ -465,14 +537,21 @@ private struct LinkPicture: View {
             join
                 .frame(height: 44)
                 .frame(maxWidth: .infinity)
-            end(icon: "dns", title: library, detail: computer.map { "on \($0)" })
+                .overlay(alignment: .bottom) {
+                    if let via {
+                        Text(via).font(.atkinson(12.5, .medium, relativeTo: .caption)).foregroundStyle(.inkMuted)
+                            .fixedSize()
+                            .offset(y: 20)
+                    }
+                }
+            end(icon: libraryIcon, title: library, detail: computer.map { "on \($0)" })
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibility)
     }
 
     private var accessibility: String {
-        let on = computer.map { " on \($0)" } ?? ""
+        let on = computer.map { " on \($0)" } ?? via.map { " through \($0)" } ?? ""
         return switch reach {
         case .connected: "This \(device) reads \(library)\(on)"
         case .checking: "Asking \(library)\(on)"

@@ -545,7 +545,8 @@ struct AttachmentList: View {
         opening = f.id
         defer { opening = nil }
         do {
-            let (data, _) = try await AppModel.session.data(from: api.attachmentURL(f.id))
+            // Over Google Drive a big file can take a while to come from the laptop: longer than a page's read.
+            let (data, _) = try await AppModel.session.data(for: URLRequest(url: api.attachmentURL(f.id), timeoutInterval: 300))
             let dir = FileManager.default.temporaryDirectory.appending(path: f.id)
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             let file = dir.appending(path: f.name)

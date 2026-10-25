@@ -125,8 +125,9 @@ struct PhoneRecordingView: View {
         case .sent: "It's in your library now."
         case .sending: "Sending it to your library…"
         case .failed: r.error ?? "Your library couldn't take it."
-        default: r.error ?? (app.offline || app.api == nil ? "Waiting to reach your library. It's sent on its own once your phone can reach your computer."
-                                                             : "Waiting to reach your library.")
+        default: r.error ?? (app.isDrive ? "On its way to your laptop. Its notes are written when your laptop is on."
+                             : app.offline || app.api == nil ? "Waiting to reach your library. It's sent on its own once your phone can reach your computer."
+                             : "Waiting to reach your library.")
         }
     }
 

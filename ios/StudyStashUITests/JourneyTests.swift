@@ -15,15 +15,18 @@ final class JourneyTests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-unpaired", "-quiet"]
         app.launch()
+        // Google first, the laptop's code second; the sample classes are under Other ways.
+        expect(app.buttons["Continue with Google"], "setup's Continue with Google")
+        tap(app.buttons["Other ways"], "setup's Other ways")
         tap(app.buttons["Try it with sample classes"], "setup's Try it with sample classes")
         expect(page(app, "home"), "Home after Try it with sample classes")
         expect(app.staticTexts["These are sample classes."], "the sample classes banner on Home")
         // A phone's tabs are Home, Due, Ask and Search: the classes are an iPad's sidebar, never a More tab.
         XCTAssertEqual(app.tabBars.buttons.count, 4, "four tabs")
         XCTAssertFalse(app.tabBars.buttons["More"].exists, "no More tab")
-        // Connect your computer ends the sample classes on setup's "On your computer" step.
+        // Connect your computer ends the sample classes on setup's first screen, Continue with Google first.
         tap(app.buttons["Connect your computer"], "the banner's Connect your computer")
-        expect(app.staticTexts["Open Study Stash on your computer"], "setup's On your computer step")
+        expect(app.buttons["Continue with Google"], "setup's Continue with Google")
     }
 
     /// A QR code that brings its 6 digits pairs without typing them; one whose code is refused opens the code page with

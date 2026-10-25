@@ -72,6 +72,7 @@ struct RootView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active, app.phase != .unpaired, DebugLaunch.value("-library") == nil { Task { await app.check() } }
             if phase == .background { Reminders.scheduleRefresh() }
+            if phase == .active || phase == .background { app.driveForeground(phase == .active) }
         }
     }
 }
@@ -342,6 +343,17 @@ enum DebugLaunch {
     @MainActor static func pairIfAsked(_ app: AppModel) async {
         #if DEBUG
         if flag("-unpaired") { app.forgetHere(); return }
+        // `-drive-token-file <path>` (with `-drive-space <prefix>`): over Google Drive with a test account's token,
+        // no one pressing Allow. In when the laptop's in the folder; else setup waits for it.
+        if value("-drive-token-file") != nil {
+            guard let account = await GoogleSignIn.debugAccount() else { return }
+            app.startDrive(account)
+            guard let link = DriveLibrary.link else { return }
+            try? await link.refresh()
+            let s = await link.status
+            if let name = s.laptop { app.connectedOverGoogle(Me.Library(name: name, version: s.version ?? "")) } else { app.forgetHere(keepGoogle: true) }
+            return
+        }
         #endif
         if flag("-demo") { app.tryDemo(); return }
         // `-library <address>`: use a library with no password (a test one) without pairing.

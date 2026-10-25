@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import WidgetKit
 import Observation
 import SwiftUI
@@ -132,8 +133,10 @@ final class AppModel {
         go(to: forSchool ? .due : .home, root: true)
     }
 
-    /// Fresh due work and calendar: reminders scheduled from them, recordings waiting sent, notes ready said.
+    /// Fresh due work and calendar: reminders scheduled from them, recordings waiting sent, notes ready said. Over
+    /// Google Drive, the copy is read first and what's waiting for the laptop sent.
     func refreshInBackground() async {
+        if isDrive, let link = DriveLibrary.link { await link.backgroundPass() }
         guard let api else { return }
         async let due = try? api.due()
         async let upcoming = try? api.upcoming()
@@ -176,6 +179,15 @@ final class AppModel {
         case "assignment" where p.count >= 2:
             if let id = Int(p[1]) { go(.assignment(class: p[0], id: id), tab: forSchool ? .due : .home, root: true) }
         case "ask": go(to: .ask)
+        case "google":
+            // A laptop's QR code for the phone over Google, scanned with the Camera app. From the sample classes it's
+            // setup, signing in with that account; connected already, it's Home.
+            if isDemo {
+                pendingGoogle = link.query["account"] ?? ""
+                Task { await endDemo() }
+            } else {
+                go(to: .home)
+            }
         default: go(to: .home)
         }
     }
@@ -355,9 +367,18 @@ final class AppModel {
         return out
     }
 
-    @ObservationIgnored private let defaults: UserDefaults
+    @ObservationIgnored let defaults: UserDefaults
     static let baseKey = "library.base"
     static let nameKey = "library.name"
+
+    /// Connected over Google Drive: the account, the laptop and when it was last there (nil when not signed in).
+    var drive: DriveStatus?
+    /// Why the phone was signed out of Google, said on the first screen.
+    var googleProblem: String?
+    /// The account signed in with (its tokens are the link's).
+    @ObservationIgnored var googleAccount: GoogleAccount?
+    /// A laptop's QR code scanned with the Camera app while the sample classes were open: setup signs in with it.
+    var pendingGoogle: String?
 
     /// The app's one model, for what Siri and Shortcuts ask (they run in the app's process).
     static weak var current: AppModel?
@@ -378,7 +399,17 @@ final class AppModel {
         } else {
             phase = .unpaired
         }
+        // Signed in to Google (connected, or waiting for the laptop to connect): the link to the folder.
+        if defaults == .standard, !DebugLaunch.flag("-unpaired"), !DebugLaunch.flag("-demo"), DebugLaunch.value("-drive-token-file") == nil,
+           let account = GoogleKeychain.read() {
+            startDrive(account)
+        } else if base?.host() == DriveLibrary.host, DebugLaunch.value("-drive-token-file") == nil {
+            // Connected over Google, but the sign-in isn't on this phone any more.
+            phase = .unpaired
+        }
     }
+
+    private var base: URL? { defaults.string(forKey: Self.baseKey).flatMap(URL.init(string:)) }
 
     private func makeClient(_ base: URL) -> APIClient {
         APIClient(base: base, session: Self.session) { [weak self] in
@@ -394,8 +425,8 @@ final class AppModel {
         c.httpShouldSetCookies = true
         c.waitsForConnectivity = false
         c.timeoutIntervalForRequest = 20
-        // The demo library answers in the app.
-        c.protocolClasses = [DemoLibrary.self] + (c.protocolClasses ?? [])
+        // The demo library answers in the app; a laptop over Google Drive through the copy and the folder.
+        c.protocolClasses = [DemoLibrary.self, DriveLibrary.self] + (c.protocolClasses ?? [])
         return URLSession(configuration: c)
     }()
 
@@ -439,12 +470,9 @@ final class AppModel {
         paired(base: DemoLibrary.base, library: Me.Library(name: "Demo library", version: "demo"))
     }
 
-    /// The sample classes ended to connect a computer: setup opens on "Open Study Stash on your computer", not Welcome.
-    var setupAtConnect = false
-
-    /// Connect your computer, from the sample classes (Home's banner, Settings): the demo ends, setup's second step.
+    /// Connect your computer, from the sample classes (Home's banner, Settings): the demo ends, on setup's first
+    /// screen (Continue with Google first).
     func endDemo() async {
-        setupAtConnect = true
         await forget()
     }
 
@@ -455,8 +483,13 @@ final class AppModel {
     }
 
     #if DEBUG
-    /// Forget the library on this phone only, without asking it anything (`-unpaired`): setup shows.
-    func forgetHere() {
+    /// Forget the library on this phone only, without asking it anything (`-unpaired`): setup shows. Google's sign-in
+    /// goes too, unless `keepGoogle` (setup then waits for the laptop).
+    func forgetHere(keepGoogle: Bool = false) {
+        if !keepGoogle {
+            DriveLibrary.link = nil
+            drive = nil
+        }
         defaults.removeObject(forKey: Self.baseKey)
         defaults.removeObject(forKey: Self.nameKey)
         api = nil
@@ -466,7 +499,8 @@ final class AppModel {
     #endif
 
     func forget() async {
-        if let api, let me = try? await api.me(), let id = me.device?.id { try? await api.removeDevice(id) }
+        if isDrive || drive != nil { await signOutOfGoogle() }
+        if !isDrive, let api, let me = try? await api.me(), let id = me.device?.id { try? await api.removeDevice(id) }
         if let base = api?.base {
             for cookie in HTTPCookieStorage.shared.cookies(for: base) ?? [] { HTTPCookieStorage.shared.deleteCookie(cookie) }
         }
@@ -476,6 +510,119 @@ final class AppModel {
         SpotlightIndex.clear()
         api = nil
         libraryName = "Your library"
+        phase = .unpaired
+    }
+}
+
+// MARK: - Over Google Drive
+
+extension AppModel {
+    /// Reading the library through the student's Google Drive (docs/phone-google.md), not Tailscale.
+    var isDrive: Bool { api?.base.host() == DriveLibrary.host }
+
+    /// Where the copy and the box are kept on the phone: in the app group, so the widgets could read them too (a debug
+    /// build's `-drive-space` keeps a folder of its own).
+    static func driveFolder(space: String) -> URL {
+        let root = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: Glance.group)
+            ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        return root.appending(path: space.isEmpty ? "drive" : "drive-\(space)")
+    }
+
+    /// A prefix on every file's name in the folder, for tests (debug builds: `-drive-space <prefix>`, or the `space`
+    /// a test laptop's QR code carried); none for real.
+    static var driveSpace: String {
+        #if DEBUG
+        DebugLaunch.value("-drive-space") ?? UserDefaults.standard.string(forKey: "drive.space") ?? ""
+        #else
+        ""
+        #endif
+    }
+
+    /// Signed in to Google: the link to Study Stash's folder in their Drive, which the app's requests to
+    /// `drive.studystash.app` go through from now on.
+    func startDrive(_ account: GoogleAccount) {
+        let space = Self.driveSpace
+        let link = DriveLink(drive: GoogleDrive(tokens: GoogleTokens(account: account)), account: account.email, prefix: space,
+                             folder: Self.driveFolder(space: space), phoneName: UIDevice.current.name, phoneModel: UIDevice.current.model)
+        DriveLibrary.link = link
+        googleAccount = account
+        drive = DriveStatus(email: account.email, laptop: nil, version: nil, seen: nil, waiting: 0)
+        Task {
+            await link.onChange { [weak self] status, wrote in
+                Task { @MainActor in self?.driveChanged(status, wrote: wrote) }
+            }
+        }
+        if UIApplication.shared.applicationState != .background { driveForeground(true) }
+    }
+
+    /// Signed in with Google's sheet: kept in the Keychain, and connected.
+    func signedIn(_ account: GoogleAccount) {
+        GoogleKeychain.save(account)
+        googleProblem = nil
+        startDrive(account)
+    }
+
+    /// The laptop's in the folder: into the app, reading it.
+    func connectedOverGoogle(_ library: Me.Library) {
+        paired(base: DriveLibrary.base, library: library)
+    }
+
+    private func driveChanged(_ status: DriveStatus, wrote: String?) {
+        guard DriveLibrary.link != nil else { return }
+        drive = status
+        if let problem = status.problem {
+            // Google stopped letting this phone in: back to the first screen, saying why.
+            googleProblem = problem
+            Task { await signOutOfGoogle() }
+            return
+        }
+        if isDrive {
+            if let name = status.laptop, name != libraryName {
+                libraryName = name
+                defaults.set(name, forKey: Self.nameKey)
+            }
+            // The laptop disconnected from Google: setup says to connect it again.
+            if status.laptop == nil, phase == .ready { phase = .unpaired }
+        }
+        // A recording the laptop took after its screen stopped waiting: it's marked sent.
+        if wrote == "/lectures", let api { Task { await RecordingStore.shared.sendWaiting(api: api) } }
+    }
+
+    /// The app came to the front or went to the back: the box says whether the phone's open (the laptop looks at it
+    /// every second while it is).
+    func driveForeground(_ on: Bool) {
+        guard let link = DriveLibrary.link else { return }
+        if on {
+            Task { await link.foreground(true) }
+        } else {
+            let id = UIApplication.shared.beginBackgroundTask(withName: "Study Stash's box")
+            Task {
+                await link.foreground(false)
+                UIApplication.shared.endBackgroundTask(id)
+            }
+        }
+    }
+
+    /// Sign out of Google on this phone: its files in the folder go, Google's access is taken back, and the phone
+    /// forgets the laptop. Recordings not yet sent stay on the phone.
+    func signOutOfGoogle() async {
+        let link = DriveLibrary.link
+        let account = googleAccount
+        DriveLibrary.link = nil
+        drive = nil
+        googleAccount = nil
+        await link?.signOut()
+        // A debug build's test account (`-drive-token-file`) is never revoked: only one this phone signed in with.
+        if let account, account.clientSecret == nil { await GoogleTokens(account: account).revoke() }
+        GoogleKeychain.forget()
+        if isDrive {
+            defaults.removeObject(forKey: Self.baseKey)
+            defaults.removeObject(forKey: Self.nameKey)
+            ResponseCache.shared.clear()
+            SpotlightIndex.clear()
+            api = nil
+            libraryName = "Your library"
+        }
         phase = .unpaired
     }
 }

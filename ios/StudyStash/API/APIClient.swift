@@ -12,6 +12,13 @@ struct APIError: Error, LocalizedError, Sendable, Equatable {
 
     static let unreachableLibrary = APIError(status: 0, detail: "Can't reach your library. Is Tailscale on, and your computer awake?")
 
+    /// Why the library couldn't be asked: over Google Drive, the words `DriveLibrary` gave ("Your laptop isn't
+    /// answering…"); otherwise Tailscale's.
+    static func unreachable(_ error: any Error) -> APIError {
+        let e = error as NSError
+        return e.domain == DriveLibrary.errorDomain ? APIError(status: 0, detail: e.localizedDescription) : .unreachableLibrary
+    }
+
     static func words(for status: Int) -> String {
         switch status {
         case 401: "This phone needs pairing with your library again."
@@ -63,7 +70,7 @@ final class APIClient: Sendable {
         } catch let e as URLError where e.code == .cancelled {
             throw CancellationError()
         } catch {
-            throw APIError.unreachableLibrary
+            throw APIError.unreachable(error)
         }
         guard let http = response as? HTTPURLResponse else { throw APIError.unreachableLibrary }
         guard (200..<300).contains(http.statusCode) else { throw failure(http.statusCode, data) }
@@ -111,7 +118,7 @@ final class APIClient: Sendable {
         do {
             (bytes, response) = try await session.bytes(for: req)
         } catch {
-            throw APIError.unreachableLibrary
+            throw APIError.unreachable(error)
         }
         guard let http = response as? HTTPURLResponse else { throw APIError.unreachableLibrary }
         guard (200..<300).contains(http.statusCode) else {

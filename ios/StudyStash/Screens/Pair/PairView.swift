@@ -9,18 +9,24 @@ import VisionKit
 // button at the foot and at most one quiet link. No accent, no gradient, the real logo. On an iPad it's the desktop's
 // setup window: the steps on the canvas at the left, the page a white sheet beside them.
 //
-// The way through (FLOWS.md, "First run"): Welcome → Open Study Stash on your computer (scan its code with this app,
-// or type the address) → [This phone can't reach your computer yet, only if it can't] → Found {library}: the 6 digits
-// → [What it's for, only if the library hasn't been told] → You're in: what to do next → Home. Or, from Welcome: Try
-// it with sample classes → Home, with the demo library. A QR code that carries the 6 digits too (`#code=042917`, from a
-// computer on a newer Study Stash) skips typing them: the phone pairs as soon as it finds the library, and only shows
-// the code page if that code is refused (used, too old), with the library's words, to type a fresh one.
+// The way through (FLOWS.md, "First run", and docs/phone-google.md): Welcome → Continue with Google (Google's sheet,
+// the same account as on the laptop; or Scan the code on your laptop, which picks that account) → [Now connect your
+// laptop, only while the laptop isn't in the Google Drive folder yet] → [What it's for, only if the library hasn't
+// been told] → You're in: what to do next → Home.
+//
+// Other ways: over Tailscale, Open Study Stash on your computer (scan its code with this app, or type the address) →
+// [This phone can't reach your computer yet, only if it can't] → Found {library}: the 6 digits → [What it's for] →
+// You're in. Or Try it with sample classes → Home, with the demo library. A QR code that carries the 6 digits too
+// (`#code=042917`, from a computer on a newer Study Stash) skips typing them: the phone pairs as soon as it finds the
+// library, and only shows the code page if that code is refused (used, too old), with the library's words, to type a
+// fresh one.
 
 /// Setup: adding this phone to a library, or trying the sample classes.
 struct PairView: View {
     @Environment(AppModel.self) private var app
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.webAuthenticationSession) private var webAuth
 
     @State private var path: [SetupPage] = SetupDebug.path
     @State private var scanning = false
@@ -37,6 +43,12 @@ struct PairView: View {
     @State private var tried = ""
     /// This phone was added: the library, and what the last steps say about it.
     @State private var joined: Joined?
+    /// Google's sheet is up, or the account's being read.
+    @State private var signingIn = false
+    /// Setup is going the Google way (the iPad's steps say so).
+    @State private var overGoogle = SetupDebug.page == "laptop"
+    /// The account the laptop's QR code named, when one did.
+    @State private var hinted: String?
 
     var body: some View {
         Group {
@@ -49,7 +61,7 @@ struct PairView: View {
         .sheet(isPresented: $scanning) {
             ScanSheet { text in
                 scanning = false
-                Task { await find(text) }
+                Task { await scanned(text) }
             } typeInstead: {
                 scanning = false
                 path.append(.address)
@@ -65,22 +77,41 @@ struct PairView: View {
             }
         }
         .onAppear {
-            // The sample classes ended to connect a computer: straight to "On your computer" (Back is Welcome).
-            guard app.setupAtConnect else { return }
-            app.setupAtConnect = false
             var t = Transaction()
             t.disablesAnimations = true
-            withTransaction(t) { path = [.connect] }
+            // Signed in to Google already, the laptop not in the folder yet: waiting for it.
+            if app.drive != nil, path.isEmpty {
+                overGoogle = true
+                withTransaction(t) { path = [.laptop] }
+            }
+            // A laptop's QR code, scanned with the Camera app from the sample classes: signing in with its account.
+            if let account = app.pendingGoogle {
+                app.pendingGoogle = nil
+                Task { await continueWithGoogle(hint: account) }
+                return
+            }
+        }
+        // Signed in to Google while Welcome shows (a debug build's test account, made just after launch): waiting for
+        // the laptop.
+        .onChange(of: app.drive?.email) { _, email in
+            if email != nil, path.isEmpty, !signingIn {
+                overGoogle = true
+                path = [.laptop]
+            }
+        }
+        // The laptop's QR code, scanned with the Camera app, opens the app here.
+        .onOpenURL { url in
+            if let account = GoogleLink.account(in: url.absoluteString) { Task { await continueWithGoogle(hint: account) } }
         }
         .task {
             // Pictures of the last steps: the demo library stands in for a library just joined.
             if SetupDebug.joins, joined == nil {
                 joined = await Joined.read(base: DemoLibrary.base, library: SetupDebug.demo, needsUses: SetupDebug.page == "uses")
             }
-            // As if this was scanned (the demo library's address, with a code or without).
-            if let scanned = SetupDebug.scanned {
-                path = [.connect]
-                await find(scanned)
+            // As if this was scanned (the demo library's address, with a code or without; a laptop's Google link).
+            if let text = SetupDebug.scanned {
+                if GoogleLink.account(in: text) == nil { path = [.connect] }
+                await scanned(text)
             }
         }
     }
@@ -100,6 +131,8 @@ struct PairView: View {
                         } differentComputer: {
                             path.removeLast()
                         }
+                    case .others: otherWays
+                    case .laptop: waitForLaptop
                     case .uses:
                         if let joined { UsesStep(joined: joined) { path.append(.done) } } else { SetupWaiting() }
                     case .done:
@@ -112,28 +145,103 @@ struct PairView: View {
 
     // MARK: The pages before the library
 
-    /// 1. Welcome.
+    /// 1. Welcome: Google first (the same account as on the laptop), the laptop's code second, the rest under Other
+    /// ways.
     private var welcome: some View {
         SetupScreen(title: "Study Stash",
-                    lede: "Your lectures, written up and filed. This app reads them from Study Stash on your computer, and records new ones.",
+                    lede: "Your lectures, written up and filed. This app reads them from Study Stash on your laptop, and records new ones.",
                     logo: true) {
-            EmptyView()
+            if let words = problem ?? app.googleProblem { ProblemText(words) }
         } foot: {
-            Button { path.append(.connect) } label: { Text("Connect to my computer").frame(maxWidth: .infinity) }
-                .buttonStyle(.pill(ink: true))
-            Button("Try it with sample classes") {
-                withAnimation(.smooth) {
-                    app.tryDemo()
-                    app.go(to: .home)
+            Button { Task { await continueWithGoogle(hint: nil) } } label: {
+                HStack(spacing: 8) {
+                    if signingIn { ProgressView().tint(.surface) }
+                    Text(signingIn ? "Signing in…" : "Continue with Google")
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.pill(ink: true))
+            .disabled(signingIn)
+            Text("Use the same Google account as on your laptop.")
+                .textStyle(.meta)
+                .foregroundStyle(.inkMuted)
+                .multilineTextAlignment(.center)
+            Button { if cameraOff { openSettings() } else { Task { await scan() } } } label: {
+                HStack(spacing: 8) {
+                    Icon(cameraOff ? "settings" : "qr_code_scanner", size: 18)
+                    Text(cameraOff ? "Turn on the camera" : "Scan the code on your laptop")
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.pill)
+            .disabled(signingIn)
+            Button("Other ways") { path.append(.others) }
+                .buttonStyle(.textLink)
+                .disabled(signingIn)
+        }
+    }
+
+    /// Other ways in: Tailscale (a library on another computer), and the sample classes.
+    private var otherWays: some View {
+        SetupScreen(title: "Other ways") {
+            VStack(alignment: .leading, spacing: 0) {
+                NextRow(icon: "dns", title: "Connect over Tailscale",
+                        about: "For a library on another computer, or if you use Tailscale already.", first: true) {
+                    path.append(.connect)
+                }
+                NextRow(icon: "book_2", title: "Try it with sample classes",
+                        about: "Made-up classes and lectures, to see what Study Stash does.") {
+                    withAnimation(.smooth) {
+                        app.tryDemo()
+                        app.go(to: .home)
+                    }
                 }
             }
-                .buttonStyle(.textLink)
-            Text("No computer with Study Stash yet? Get it at \(SetupLinks.siteName)")
+        } foot: {
+            Text("No laptop with Study Stash yet? Get it at \(SetupLinks.siteName)")
                 .textStyle(.meta)
                 .foregroundStyle(.inkMuted)
                 .multilineTextAlignment(.center)
                 .textSelection(.enabled)
-                .padding(.top, 4)
+        }
+    }
+
+    /// Signed in to Google, the laptop not in the folder yet: what to do on the laptop, and waiting for it.
+    private var waitForLaptop: some View {
+        let email = app.drive?.email ?? (SetupDebug.page == "laptop" ? "sam.rivera@gmail.com" : "")
+        let other = hinted.flatMap { h in h.isEmpty || h.lowercased() == email.lowercased() ? nil : h }
+        return SetupScreen(title: "Now connect your laptop",
+                           lede: "On your laptop, open Study Stash, then Settings, then Phone, and choose Connect with Google. Use the same account as here.") {
+            VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Google account on this phone").textStyle(.meta).foregroundStyle(.inkSubtle)
+                    Text(email).textStyle(.body).foregroundStyle(.ink)
+                }
+                if let other {
+                    ProblemText("Your laptop's code is for \(other). Use a different Google account and choose that one.")
+                }
+                HStack(spacing: 10) {
+                    ProgressView().tint(.inkSubtle)
+                    Text("Waiting for your laptop…").textStyle(.body).foregroundStyle(.inkMuted)
+                }
+                if let problem { ProblemText(problem) }
+            }
+        } foot: {
+            Button("Use a different Google account") {
+                Task {
+                    await app.signOutOfGoogle()
+                    path = []
+                }
+            }
+            .buttonStyle(.textLink)
+        }
+        .navigationBarBackButtonHidden()
+        .task {
+            // Every few seconds, until the laptop's file is in the folder.
+            while !Task.isCancelled {
+                if await laptopJoined() { return }
+                try? await Task.sleep(for: .seconds(3))
+            }
         }
     }
 
@@ -222,14 +330,15 @@ struct PairView: View {
 
     /// The steps the iPad's side shows ("What it's for" once it's known to be one), and which one is open.
     private var steps: [String] {
-        ["Welcome", "Your computer", "The code"] + (joined?.needsUses == true ? ["What it's for"] : []) + ["You're in"]
+        (overGoogle ? ["Welcome", "Google", "Your laptop"] : ["Welcome", "Your computer", "The code"])
+            + (joined?.needsUses == true ? ["What it's for"] : []) + ["You're in"]
     }
 
     private var current: Int {
         switch path.last {
-        case nil: 0
+        case nil, .others?: 0
         case .connect?, .address?, .cantReach?: 1
-        case .code?: 2
+        case .code?, .laptop?: 2
         case .uses?: 3
         case .done?: steps.count - 1
         }
@@ -265,6 +374,62 @@ struct PairView: View {
     private func typeAddressInstead() {
         problem = nil
         path.append(.address)
+    }
+
+    /// What the camera read: a laptop's code for the phone over Google (`studystash://google?account=…`) signs in
+    /// with that account; anything else is a library's address, as before.
+    private func scanned(_ text: String) async {
+        if let account = GoogleLink.account(in: text) {
+            await continueWithGoogle(hint: account)
+        } else {
+            await find(text)
+        }
+    }
+
+    /// Continue with Google: Google's sheet (the account `hint` names picked already), then the laptop, if it's in the
+    /// folder, else the page that waits for it.
+    private func continueWithGoogle(hint: String?) async {
+        guard !signingIn else { return }
+        problem = nil
+        app.googleProblem = nil
+        overGoogle = true
+        hinted = hint
+        signingIn = true
+        defer { signingIn = false }
+        do {
+            if app.drive == nil || (hint.map { !$0.isEmpty && $0.lowercased() != app.drive?.email.lowercased() } ?? false) {
+                if app.drive != nil { await app.signOutOfGoogle() }
+                let account = try await GoogleSignIn.signIn(hint: hint.flatMap { $0.isEmpty ? nil : $0 }, using: webAuth)
+                app.signedIn(account)
+            }
+            if await laptopJoined() { return }
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            if path.last != .laptop { path.append(.laptop) }
+        } catch is CancellationError {
+        } catch {
+            UINotificationFeedbackGenerator().notificationOccurred(.error)
+            problem = (error as? GoogleProblem)?.words ?? "Couldn't sign in to Google. Try again."
+            if case .laptop? = path.last { path.removeLast() }
+        }
+    }
+
+    /// Read the folder: when the laptop's there, the last steps (What it's for, You're in), as for a library found
+    /// over Tailscale. False while it isn't.
+    private func laptopJoined() async -> Bool {
+        guard let link = DriveLibrary.link else { return false }
+        do {
+            try await link.refresh()
+        } catch let e as GoogleProblem {
+            problem = e.words
+            return false
+        } catch {}
+        let s = await link.status
+        guard let name = s.laptop else { return false }
+        let joined = await Joined.read(base: DriveLibrary.base, library: Me.Library(name: name, version: s.version ?? ""))
+        remember(joined)
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        path.append(joined.needsUses ? .uses : .done)
+        return true
     }
 
     /// Try each address the scan or the typing gave, best first, until one is a library. Found: the code, or, when
@@ -315,6 +480,10 @@ struct PairView: View {
 
 /// The pages after Welcome.
 enum SetupPage: Hashable {
+    /// Other ways in: Tailscale, the sample classes.
+    case others
+    /// Signed in to Google, waiting for the laptop to connect.
+    case laptop
     case connect
     case address
     case cantReach(detail: String)
@@ -339,6 +508,22 @@ enum SetupPage: Hashable {
             let words = (error as? APIError)?.detail ?? APIError.unreachableLibrary.detail
             return (.code(base: base, library: library, problem: words), nil)
         }
+    }
+}
+
+/// A laptop's QR code for the phone over Google Drive: `studystash://google?account=<email>` (a test laptop's adds
+/// `&space=<prefix>`, which a debug build takes as its `-drive-space`).
+enum GoogleLink {
+    /// The account the code names ("" when it names none); nil when the text isn't such a code.
+    static func account(in text: String) -> String? {
+        guard let url = URL(string: text.trimmingCharacters(in: .whitespacesAndNewlines)), let link = AppLink.parts(url),
+              link.place == "google" else { return nil }
+        #if DEBUG
+        if let space = link.query["space"], DebugLaunch.value("-drive-space") == nil {
+            UserDefaults.standard.set(space.isEmpty ? nil : space, forKey: "drive.space")
+        }
+        #endif
+        return link.query["account"] ?? ""
     }
 }
 
@@ -769,7 +954,10 @@ private struct NextRow: View {
                 .padding(.vertical, 16)
             }
             .buttonStyle(.row)
-            .accessibilityElement(children: .combine)
+            .accessibilityElement(children: .ignore)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityLabel(title)
+            .accessibilityHint(about)
         }
     }
 }
@@ -1134,7 +1322,7 @@ struct QRScanner: UIViewControllerRepresentable {
 // MARK: - Pictures
 
 /// Setup's own launch arguments (debug builds), for pictures of each page and state with `-unpaired`:
-/// `-pair-page connect | finding | connecting | camera-off | address | cant-reach | code | typing | wrong | uses | done`
+/// `-pair-page others | laptop | connect | finding | connecting | camera-off | address | cant-reach | code | typing | wrong | uses | done`
 /// (`-pair-code` is `-pair-page code`). The code pages use the demo library's address, which pairs only with 123456;
 /// `uses` and `done` read the demo library as if this phone had just joined it. `-pair-scan <text>` goes through
 /// setup as if `text` had been scanned: `-pair-scan 'https://demo.studystash.app/app/#code=123456'` pairs at once,
@@ -1148,10 +1336,12 @@ private enum SetupDebug {
 
     static var path: [SetupPage] {
         switch page {
-        case "connect", "finding", "connecting", "camera-off": [.connect]
-        case "address": [.connect, .address]
-        case "cant-reach": [.connect, .cantReach(detail: APIError.unreachableLibrary.detail)]
-        case "code", "typing", "wrong": [.connect, .code(base: DemoLibrary.base, library: demo)]
+        case "others": [.others]
+        case "laptop": [.laptop]
+        case "connect", "finding", "connecting", "camera-off": [.others, .connect]
+        case "address": [.others, .connect, .address]
+        case "cant-reach": [.others, .connect, .cantReach(detail: APIError.unreachableLibrary.detail)]
+        case "code", "typing", "wrong": [.others, .connect, .code(base: DemoLibrary.base, library: demo)]
         case "uses": [.uses]
         case "done": [.done]
         default: []

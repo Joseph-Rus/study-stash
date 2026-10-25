@@ -848,7 +848,8 @@ struct OnThisPhone: View {
         case .failed: return r.error ?? "Couldn't send it. It's sent again when your library can be reached."
         default:
             let length = Format.duration(r.seconds)
-            return length.isEmpty ? "Waiting to reach your library" : "\(length), waiting to reach your library"
+            let waiting = app.isDrive ? "on its way to your laptop" : "waiting to reach your library"
+            return length.isEmpty ? waiting.prefix(1).uppercased() + waiting.dropFirst() : "\(length), \(waiting)"
         }
     }
 }
