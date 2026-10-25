@@ -195,7 +195,7 @@ struct StudyView: View {
     private func makingNote(over: Bool) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
-                ProgressView().tint(.inkSubtle)
+                StudyLoader(.page, color: .inkSubtle)
                 Text(over ? "Making new ones…" : "Making flashcards and a quiz from your notes…")
                     .textStyle(.h2).foregroundStyle(.ink)
                     .fixedSize(horizontal: false, vertical: true)

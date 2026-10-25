@@ -240,7 +240,7 @@ struct AddFilesView: View {
             }
             Button { Task { await send() } } label: {
                 HStack(spacing: 8) {
-                    if sending { ProgressView().tint(.surface) }
+                    if sending { StudyLoader(.inline, color: .surface) }
                     Text(sending ? "Adding…" : files.count == 1 ? "Add 1 file" : "Add \(files.count) files")
                 }
                 .frame(maxWidth: .infinity)

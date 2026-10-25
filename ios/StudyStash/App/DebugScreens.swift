@@ -253,6 +253,10 @@ struct ComponentGallery: View {
                 Text("italic").textStyle(.body, italic: true)
                 Text("0123 1:45").textStyle(.body)
             }
+            HStack(spacing: 24) {
+                StudyLoader(.inline); StudyLoader(.page); StudyLoader(.screen)
+                HStack(spacing: 8) { StudyLoader(.inline, color: .inkSubtle); Text("Loading your notes").textStyle(.body).foregroundStyle(.inkMuted) }
+            }
             HStack {
                 Segmented(selection: $seg, options: [(0, "Month"), (1, "Week")])
                 Spacer()

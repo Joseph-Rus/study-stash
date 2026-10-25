@@ -113,7 +113,7 @@ struct UsesView: View {
             } label: {
                 ZStack {
                     Text("Continue").opacity(saving ? 0 : 1)
-                    if saving { ProgressView().tint(.surface) }
+                    if saving { StudyLoader(.inline, color: .surface) }
                 }
                 .frame(maxWidth: .infinity)
             }

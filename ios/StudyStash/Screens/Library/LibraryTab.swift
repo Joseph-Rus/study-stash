@@ -322,7 +322,7 @@ private struct LibraryHome: View {
                                detail: error.unreachable ? "They show when your phone can reach your computer again. Recording still works." : error.detail,
                                actionTitle: "Try again") { Task { await source.load() } }
                 } else {
-                    ProgressView().tint(.inkSubtle).frame(maxWidth: .infinity, minHeight: 120)
+                    StudyLoader(.page, color: .inkSubtle).frame(maxWidth: .infinity, minHeight: 120)
                 }
             } else {
                 LazyVStack(alignment: .leading, spacing: 0) {
@@ -336,7 +336,7 @@ private struct LibraryHome: View {
                 }
                 if !onlyUnsorted, !allLoaded, list.count >= Self.pageSize {
                     Group {
-                        if loadingMore { ProgressView().tint(.inkSubtle) } else {
+                        if loadingMore { StudyLoader(.inline, color: .inkSubtle) } else {
                             Button("Show more") { Task { await loadMore() } }.buttonStyle(.textLink)
                         }
                     }
@@ -811,7 +811,7 @@ struct OnThisPhone: View {
                      status: status(r), late: r.state == .failed && r.error != nil)
             }
             .buttonStyle(.row)
-            if r.state == .sending { ProgressView().tint(.inkSubtle) }
+            if r.state == .sending { StudyLoader(.inline, color: .inkSubtle) }
             Menu { actions(r) } label: { Label("More", icon: "more_horiz") }
                 .buttonStyle(.icon)
                 .accessibilityLabel("More for \(title(r))")

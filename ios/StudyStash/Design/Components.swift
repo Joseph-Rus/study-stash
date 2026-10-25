@@ -807,7 +807,7 @@ struct Loaded<T: Codable & Sendable, Content: View>: View {
                 Task { await resource.load() }
             }
         } else {
-            ProgressView().tint(.inkSubtle).frame(maxWidth: .infinity, minHeight: 200)
+            StudyLoader(.page, color: .inkSubtle).frame(maxWidth: .infinity, minHeight: 200)
         }
     }
 }

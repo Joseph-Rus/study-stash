@@ -43,7 +43,7 @@ struct EventRow: View {
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    if filing { ProgressView().tint(.inkSubtle) }
+                    if filing { StudyLoader(.inline, color: .inkSubtle) }
                 }
                 .padding(.vertical, 10)
                 .contentShape(.rect)

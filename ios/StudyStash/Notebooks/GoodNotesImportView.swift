@@ -49,7 +49,7 @@ struct GoodNotesImportView: View {
                             EmptyState(title: "Couldn't read this notebook", detail: problem)
                         } else {
                             HStack(spacing: 10) {
-                                ProgressView().tint(.inkSubtle)
+                                StudyLoader(.page, color: .inkSubtle)
                                 Text("Reading the notebook…").textStyle(.lede).foregroundStyle(.inkMuted)
                             }
                             .padding(.top, 24)
@@ -134,7 +134,7 @@ struct GoodNotesImportView: View {
 
         Button { Task { await bringIn() } } label: {
             HStack(spacing: 8) {
-                if working { ProgressView().tint(.surface) }
+                if working { StudyLoader(.inline, color: .surface) }
                 Text(working ? "Bringing it in…" : "Import")
             }
             .frame(maxWidth: .infinity)

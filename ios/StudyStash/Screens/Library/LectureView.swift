@@ -232,7 +232,7 @@ struct LectureView: View {
                        actionTitle: "Try again") { Task { await load() } }
                 .padding(.top, 24)
         } else {
-            ProgressView().tint(.inkSubtle).frame(maxWidth: .infinity, minHeight: 240)
+            StudyLoader(.page, color: .inkSubtle).frame(maxWidth: .infinity, minHeight: 240)
         }
     }
 

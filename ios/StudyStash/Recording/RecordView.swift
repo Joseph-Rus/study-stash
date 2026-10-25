@@ -118,7 +118,7 @@ struct RecordView: View {
         switch recorder.phase {
         case .preparing(let words):
             VStack(alignment: .leading, spacing: 12) {
-                ProgressView().tint(.inkSubtle)
+                StudyLoader(.page, color: .inkSubtle)
                 Text(words).textStyle(.lede).foregroundStyle(.inkMuted)
             }
             .padding(.horizontal, Space.pageCompact)
@@ -127,7 +127,7 @@ struct RecordView: View {
             CantRecord(words: words) { Task { await recorder.start(className: startClass, title: app.recordTitle) } }
         case .idle where recorder.recording == nil:
             // For a moment before it starts.
-            ProgressView().tint(.inkSubtle).padding(.horizontal, Space.pageCompact).padding(.top, 24)
+            StudyLoader(.page, color: .inkSubtle).padding(.horizontal, Space.pageCompact).padding(.top, 24)
         default:
             recordingPage
         }
@@ -303,7 +303,7 @@ private struct RecordingBar: View {
             Button(action: stop) {
                 HStack(spacing: 8) {
                     if finishing {
-                        ProgressView().controlSize(.mini).tint(.surface)
+                        StudyLoader(.inline, color: .surface)
                     } else {
                         RoundedRectangle(cornerRadius: 2).fill(.surface).frame(width: 10, height: 10)
                     }

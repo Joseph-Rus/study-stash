@@ -339,7 +339,7 @@ private struct DuePage: View {
                         Task { await load() }
                     }
                 } else if list == nil {
-                    ProgressView().tint(.inkSubtle).frame(maxWidth: .infinity, minHeight: 240)
+                    StudyLoader(.page, color: .inkSubtle).frame(maxWidth: .infinity, minHeight: 240)
                 } else if noCanvas {
                     EmptyState(title: "Nothing to show yet",
                                detail: "Link Canvas in Study Stash on your computer, in Settings, then Canvas. What's due shows up here.")

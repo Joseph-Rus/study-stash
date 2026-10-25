@@ -26,7 +26,7 @@ struct ChatRow: View {
                 }
                 Spacer(minLength: 8)
                 if opening {
-                    ProgressView().controlSize(.small).tint(.inkSubtle)
+                    StudyLoader(.inline, color: .inkSubtle)
                 } else if current {
                     Icon("check", size: 16).foregroundStyle(.ink)
                 } else {
@@ -113,7 +113,7 @@ struct ChatsSheet: View {
                             .padding(.horizontal, Space.pageCompact)
                         }
                     } else {
-                        ProgressView().tint(.inkSubtle).frame(maxWidth: .infinity, maxHeight: .infinity)
+                        StudyLoader(.screen, color: .inkSubtle).frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                 }
             }

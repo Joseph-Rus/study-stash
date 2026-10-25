@@ -155,7 +155,7 @@ struct PairView: View {
         } foot: {
             Button { Task { await continueWithGoogle(hint: nil) } } label: {
                 HStack(spacing: 8) {
-                    if signingIn { ProgressView().tint(.surface) }
+                    if signingIn { StudyLoader(.inline, color: .surface) }
                     Text(signingIn ? "Signing in…" : "Continue with Google")
                 }
                 .frame(maxWidth: .infinity)
@@ -221,7 +221,7 @@ struct PairView: View {
                     ProblemText("Your laptop's code is for \(other). Use a different Google account and choose that one.")
                 }
                 HStack(spacing: 10) {
-                    ProgressView().tint(.inkSubtle)
+                    StudyLoader(.page, color: .inkSubtle)
                     Text("Waiting for your laptop…").textStyle(.body).foregroundStyle(.inkMuted)
                 }
                 if let problem { ProblemText(problem) }
@@ -262,7 +262,7 @@ struct PairView: View {
             Button { if cameraOff { openSettings() } else { Task { await scan() } } } label: {
                 HStack(spacing: 8) {
                     if finding {
-                        ProgressView().tint(.surface)
+                        StudyLoader(.inline, color: .surface)
                         Text(connecting ? "Connecting…" : "Finding your library…")
                     } else if cameraOff {
                         Icon("settings", size: 18)
@@ -293,7 +293,7 @@ struct PairView: View {
         } foot: {
             Button { Task { await find(address) } } label: {
                 HStack(spacing: 8) {
-                    if finding { ProgressView().tint(.surface) }
+                    if finding { StudyLoader(.inline, color: .surface) }
                     Text(finding ? (connecting ? "Connecting…" : "Finding your library…") : "Find it")
                 }
                 .frame(maxWidth: .infinity)
@@ -314,7 +314,7 @@ struct PairView: View {
         } foot: {
             Button { Task { await find(tried) } } label: {
                 HStack(spacing: 8) {
-                    if finding { ProgressView().tint(.surface) }
+                    if finding { StudyLoader(.inline, color: .surface) }
                     Text(finding ? (connecting ? "Connecting…" : "Finding your library…") : "Try again")
                 }
                 .frame(maxWidth: .infinity)
@@ -663,7 +663,7 @@ private struct CodeEntry: View {
         } foot: {
             Button { Task { await pair() } } label: {
                 HStack(spacing: 8) {
-                    if busy { ProgressView().tint(.surface) }
+                    if busy { StudyLoader(.inline, color: .surface) }
                     Text(busy ? "Connecting…" : "Connect")
                 }
                 .frame(maxWidth: .infinity)
@@ -788,7 +788,7 @@ private struct UsesStep: View {
         } foot: {
             Button { Task { await save() } } label: {
                 HStack(spacing: 8) {
-                    if saving { ProgressView().tint(.surface) }
+                    if saving { StudyLoader(.inline, color: .surface) }
                     Text(saving ? "Saving…" : "Continue")
                 }
                 .frame(maxWidth: .infinity)
@@ -965,7 +965,7 @@ private struct NextRow: View {
 /// While the last steps' details are read (only ever a moment).
 private struct SetupWaiting: View {
     var body: some View {
-        ProgressView().tint(.inkSubtle)
+        StudyLoader(.page, color: .inkSubtle)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .page()
             .navigationBarBackButtonHidden()

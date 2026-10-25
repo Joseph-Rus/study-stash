@@ -228,7 +228,7 @@ struct ClassView: View {
                     Task { await lectures?.load() }
                 }
             } else {
-                ProgressView().tint(.inkSubtle).frame(maxWidth: .infinity, minHeight: 120)
+                StudyLoader(.page, color: .inkSubtle).frame(maxWidth: .infinity, minHeight: 120)
             }
         }
     }
@@ -497,7 +497,7 @@ struct AttachmentList: View {
                                 .lineLimit(1)
                         }
                         Spacer(minLength: 8)
-                        if opening == f.id { ProgressView().tint(.inkSubtle) }
+                        if opening == f.id { StudyLoader(.inline, color: .inkSubtle) }
                     }
                     .padding(.vertical, 10)
                 }

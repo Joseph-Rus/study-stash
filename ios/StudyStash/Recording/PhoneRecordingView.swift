@@ -68,7 +68,7 @@ struct PhoneRecordingView: View {
                     } else {
                         Button { Task { await send() } } label: {
                             HStack(spacing: 8) {
-                                if sending { ProgressView().controlSize(.mini).tint(.surface) }
+                                if sending { StudyLoader(.inline, color: .surface) }
                                 Text(sending ? "Sending…" : "Send now")
                             }
                         }

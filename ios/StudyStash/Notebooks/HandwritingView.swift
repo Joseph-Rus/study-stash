@@ -208,7 +208,7 @@ struct NotebookEditor: View {
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
         ToolbarItem(placement: .topBarLeading) {
             Button { Task { await close() } } label: {
-                if closing { ProgressView().tint(.inkSubtle) } else { Text("Done").textStyle(.button) }
+                if closing { StudyLoader(.inline, color: .inkSubtle) } else { Text("Done").textStyle(.button) }
             }
             .disabled(closing)
             .accessibilityLabel("Done")

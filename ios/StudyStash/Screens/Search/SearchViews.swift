@@ -86,7 +86,7 @@ struct SearchResultsView: View {
                 found(r)
             }
         } else {
-            ProgressView().controlSize(.regular).tint(.inkSubtle)
+            StudyLoader(.page, color: .inkSubtle)
                 .frame(maxWidth: .infinity, minHeight: 160)
         }
     }
