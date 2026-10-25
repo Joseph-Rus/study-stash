@@ -56,6 +56,32 @@ It archives, signs and uploads, numbering the build itself. Then in App Store Co
   want one. The first build of each version goes to Beta App Review (usually about a day); later builds of the same
   version often don't. A build can be tested for 90 days.
 
+## External testing: what to paste
+
+App Store Connect → the app → **TestFlight** → **Test Information** (once), then a group under **External Testing**
+with the build, then **Submit for Review**.
+
+- **Beta App Description:** Study Stash records your lectures and turns them into notes on your computer. This app
+  is its companion: read your notes and lectures, see what's due, ask questions about your classes, record a lecture
+  on the phone (it's written down on the phone), and take whiteboard photos that go into your notes. It links to
+  Study Stash on your computer through your own Google Drive.
+- **What to Test** (per build): record a lecture on the phone (it keeps going while you take a whiteboard photo);
+  Ask a question, including "what's due this week?"; take whiteboard photos while your computer records; open a
+  lecture's notes and its photo strip. Tell us anything that's confusing, slow or wrong.
+- **Feedback email:** the one testers should write to.
+- **Sign-in required:** No.
+- **Review notes:**
+  > No account is needed to review the app. On the first screen tap **Other ways → Try it with sample classes**: the
+  > whole app runs on sample classes stored on the phone (Home, a lecture's notes, Due, Ask, Search, recording).
+  > For real use the app pairs with Study Stash on the student's own computer. "Continue with Google" is not an
+  > account with us: it only lets the app reach a private Study Stash folder in the student's own Google Drive
+  > (Google's application data folder scope), which their computer also uses. So it isn't a sign-in service under
+  > guideline 4.8. The microphone is used only while recording; speech is written down on the device; the camera is
+  > used only to take whiteboard photos.
+
+**Before the first external build:** Google's sign-in must be out of Testing (Google Auth Platform → Audience →
+**Publish app**). In Testing only listed test users can press Allow; everyone else sees "Access blocked".
+
 ## The App Store
 
 Submit a TestFlight build for review with the same notes as above, and:
