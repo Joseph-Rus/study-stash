@@ -574,79 +574,161 @@ struct LevelBars: View {
 
 // MARK: - Ask
 
-/// Ask: a bar floating on its shadow at the foot of a page, the panel's corners; ringed in ink with the caret in it.
-/// The question grows to five lines; the scope ("All notes ⌄") and the round ink send button sit at its end (on a
-/// phone, the scope under the question, so the placeholder has the width). The placeholder is the desktop's: "Ask
-/// anything about your notes", "Ask about Machine Learning", "Ask about this lecture".
-struct AskBar: View {
+/// Ask's bar: one pill at the foot of the page, as a messaging app has it. Inside, from left to right: what it asks
+/// about as a small chip (`chip`, a menu), the question, which grows to six lines, and the send circle, all lined up on
+/// the last line, so nothing moves when the question is sent, cleared or a new chat starts. A hairline round it, no
+/// ring with the caret in it. Send (or Return) hands the question to `onSend` and empties the field; the circle is grey
+/// with nothing to send, ink with something, and Stop (`onStop`) while an answer is written.
+struct AskBar<Chip: View>: View {
     var placeholder: String
     @Binding var text: String
-    /// What it asks about, shown as a picker ("All notes"); nil for none.
-    var scope: String?
     var busy = false
-    var onScope: (() -> Void)?
+    var onStop: (() -> Void)?
+    /// Puts the caret in it when it appears.
+    var focusOnAppear = false
+    var onFocus: ((Bool) -> Void)?
+    @ViewBuilder var chip: () -> Chip
     var onSend: () -> Void
     @FocusState private var focused: Bool
-    @Environment(\.horizontalSizeClass) private var sizeClass
+    @State private var fieldID = UUID()
+    @ScaledMetric(relativeTo: .body) private var control: CGFloat = 34
+
+    init(placeholder: String, text: Binding<String>, busy: Bool = false, onStop: (() -> Void)? = nil, focusOnAppear: Bool = false,
+         onFocus: ((Bool) -> Void)? = nil, @ViewBuilder chip: @escaping () -> Chip, onSend: @escaping () -> Void) {
+        self.placeholder = placeholder
+        _text = text
+        self.busy = busy
+        self.onStop = onStop
+        self.focusOnAppear = focusOnAppear
+        self.onFocus = onFocus
+        self.chip = chip
+        self.onSend = onSend
+    }
 
     private var empty: Bool { text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
     var body: some View {
-        let compact = sizeClass != .regular
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .bottom, spacing: 8) {
-                field
-                if !compact, let scope { scopeButton(scope).padding(.bottom, 9) }
-                if !(compact && scope != nil) { send.padding(.bottom, 9) }
-            }
-            if compact, let scope {
-                HStack {
-                    scopeButton(scope).padding(.leading, -8)
-                    Spacer()
-                    send
-                }
-                .padding(.leading, 18)
-                .padding(.bottom, 9)
-                .padding(.top, -6)
-            }
+        HStack(alignment: .bottom, spacing: 8) {
+            chip()
+                .frame(minHeight: control)
+            field
+            send
         }
-        .padding(.trailing, 9)
-        .frame(minHeight: 52)
-        .background(.surface, in: .rect(cornerRadius: Radius.panel))
-        .lifted(focused ? .floatFocus : .float, in: RoundedRectangle(cornerRadius: Radius.panel))
+        .padding(5)
+        .background(.surface, in: .rect(cornerRadius: (control + 10) / 2, style: .continuous))
+        .lifted(.float, in: RoundedRectangle(cornerRadius: (control + 10) / 2, style: .continuous))
+        .contentShape(.rect(cornerRadius: (control + 10) / 2, style: .continuous))
+        .onTapGesture { focused = true }
+        .onAppear {
+            guard focusOnAppear else { return }
+            Task { try? await Task.sleep(for: .milliseconds(400)); focused = true }
+        }
+        .onChange(of: focused) { _, now in onFocus?(now) }
     }
 
     private var field: some View {
-        TextField("", text: $text, prompt: Text(placeholder).foregroundStyle(.inkMuted), axis: .vertical)
+        TextField("", text: $text, prompt: Text(placeholder).foregroundStyle(.inkSubtle), axis: .vertical)
             .textStyle(.lede)
             .foregroundStyle(.ink)
-            .lineLimit(1...5)
+            .tint(.ink)
+            .lineLimit(1...6)
             .focused($focused)
+            .id(fieldID)
             .submitLabel(.send)
-            .onSubmit(onSend)
+            .onSubmit(submit)
+            .onChange(of: text) { _, new in
+                // Return sends, as the desktop's Enter does (a vertical field puts a line break in instead); a
+                // question pasted on several lines becomes one, as the desktop's does.
+                guard new.contains(where: \.isNewline) else { return }
+                let returned = new.last?.isNewline == true
+                text = new.split(whereSeparator: \.isNewline).joined(separator: " ")
+                if returned { submit() }
+            }
             .accessibilityIdentifier("ask.field")
-            .padding(.vertical, 14)
-            .padding(.leading, 18)
+            .accessibilityLabel(placeholder)
+            .padding(.vertical, 5)
+            .frame(maxWidth: .infinity, minHeight: control, alignment: .leading)
             .layoutPriority(1)
     }
 
-    private func scopeButton(_ scope: String) -> some View {
-        Button { onScope?() } label: { PickerLabel(scope) }
-            .buttonStyle(AskScopeStyle())
+    /// Sends what's typed, and empties the field: a new field at once (what the keyboard was still holding, a
+    /// suggestion or dictation, would otherwise bring the question back), and a look a moment later.
+    private func submit() {
+        guard !busy, !empty else { return }
+        let sent = text
+        let typing = focused
+        onSend()
+        text = ""
+        // A new field: whatever the keyboard was holding goes with the old one. The caret stays.
+        fieldID = UUID()
+        if typing { focused = true }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(250))
+            if text == sent || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { text = "" }
+        }
     }
 
     private var send: some View {
-        Button(action: onSend) {
-            Icon(busy ? "more_horiz" : "arrow_upward", size: 18)
-                .foregroundStyle(.surface)
-                .frame(width: 34, height: 34)
-                .background(.ink, in: .circle)
+        let on = busy || !empty
+        return Button {
+            if busy { onStop?() } else { submit() }
+        } label: {
+            ZStack {
+                Circle().fill(on ? Color.ink : .surfaceSunken)
+                if busy {
+                    Icon("stop", size: 13, filled: true)
+                } else {
+                    Icon("arrow_upward", size: 18)
+                }
+            }
+            .foregroundStyle(on ? Color.surface : .inkSubtle)
+            .frame(width: control, height: control)
+            .contentShape(.circle)
         }
-        .buttonStyle(.plain)
-        .disabled(busy || empty)
-        .opacity(busy || empty ? 0.35 : 1)
-        .accessibilityLabel("Ask")
-        .accessibilityIdentifier("ask.send")
+        .buttonStyle(SendStyle())
+        .disabled(!on || (busy && onStop == nil))
+        .animation(.smooth(duration: 0.15), value: on)
+        .accessibilityLabel(busy ? "Stop the answer" : "Send question")
+        .accessibilityIdentifier(busy ? "ask.stop" : "ask.send")
+    }
+}
+
+extension AskBar where Chip == AskScopeChip {
+    /// The bar with its scope as a plain chip ("All notes"; nothing with no scope).
+    init(placeholder: String, text: Binding<String>, scope: String?, busy: Bool = false, onSend: @escaping () -> Void) {
+        self.init(placeholder: placeholder, text: text, busy: busy, chip: { AskScopeChip(title: scope ?? "") }, onSend: onSend)
+    }
+}
+
+/// What Ask asks about, as the small chip at the start of its bar: a class's swatch, its name, a chevron. Put it in a
+/// Menu as its label.
+struct AskScopeChip: View {
+    var title: String
+    var hue: Highlighter?
+    var showsSwatch = false
+    @ScaledMetric(relativeTo: .subheadline) private var height: CGFloat = 30
+
+    var body: some View {
+        if !title.isEmpty {
+            HStack(spacing: 5) {
+                if showsSwatch { Swatch(hue, small: true) }
+                Text(title).textStyle(.buttonSmall).lineLimit(1).frame(maxWidth: 120, alignment: .leading).fixedSize(horizontal: true, vertical: false)
+                Icon("expand_more", size: 13, relativeTo: .subheadline)
+            }
+            .foregroundStyle(.inkMuted)
+            .padding(.horizontal, 10)
+            .frame(height: height)
+            .background(.surfaceSunken, in: .capsule)
+            .overlay(Capsule().strokeBorder(.line))
+            .contentShape(.capsule)
+        }
+    }
+}
+
+/// Send and Stop: pressed, a touch lighter.
+private struct SendStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label.opacity(configuration.isPressed ? 0.8 : 1)
     }
 }
 
@@ -675,16 +757,6 @@ struct AskBarButton: View {
     }
 }
 
-private struct AskScopeStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .textStyle(.buttonSmall)
-            .foregroundStyle(configuration.isPressed ? Color.ink : .inkMuted)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-            .contentShape(.rect)
-    }
-}
 
 // MARK: - Empty, loading, offline, toasts
 

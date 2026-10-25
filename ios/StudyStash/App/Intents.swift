@@ -21,6 +21,7 @@ struct AskIntent: AppIntent {
                 case .answer(let t): answer = t
                 case .done(let reply): if !reply.answer.isEmpty { answer = reply.answer }
                 case .error(_, let detail): return .result(value: "", dialog: IntentDialog(stringLiteral: detail))
+                case .chat: break
                 }
             }
         } catch {

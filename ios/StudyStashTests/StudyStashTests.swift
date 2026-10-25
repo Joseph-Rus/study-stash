@@ -157,6 +157,38 @@ import Testing
         """, as: AskEvent.self)
         guard case .done(let reply) = done else { Issue.record("done"); return }
         #expect(reply.sources.count == 1)
+        // A kept chat's id comes first: an answer, not an error.
+        guard case .chat("261024-101500-a1b2c3") = try decode(#"{"kind":"chat","id":"261024-101500-a1b2c3"}"#, as: AskEvent.self) else {
+            Issue.record("chat"); return
+        }
+    }
+
+    /// Which AI answers Ask: the library's `GET /ai` says it by its id ("codex" is ChatGPT); an answer by its name.
+    @Test func theAnsweringAIIsReadFromTheLibrary() throws {
+        let s = try decode("""
+        {"provider":"claude","jobs":{"notes":{"provider":"claude","model":"","own":false},"ask":{"provider":"codex","model":"gpt-5","own":true}},
+         "providers":[{"id":"claude","name":"Claude","installed":true,"site":"","test":"","models":[]}]}
+        """, as: AISettings.self)
+        #expect(AskEngine(id: s.jobs?["ask"]?.provider) == .chatgpt)
+        #expect(AskEngine(id: "gemini") == .gemini && AskEngine(id: "ollama") == .ollama && AskEngine(id: "something") == nil)
+        #expect(AskEngine(name: "Local model (Ollama)") == .ollama && AskEngine(name: "Claude") == .claude)
+    }
+
+    /// A chat picked from Chats opens as it was: each question with its answer and sources, a failed one with why.
+    @Test @MainActor func aKeptChatOpensAsItsTurns() throws {
+        let chat = try decode("""
+        {"id":"c1","title":"Limits","class":"Calculus II","lecture":"","updated":"2026-10-24T09:00:00.0000000-07:00","kind":"ask","scope":"home","turns":2,
+         "messages":[{"role":"user","text":"What's a limit?","when":"","tools":[]},
+                     {"role":"assistant","text":"Where f goes **near** a point.","when":"","tools":[],"failed":false,
+                      "sources":[{"id":"l1","title":"Limits","class":"Calculus II","date":"2026-10-20","at":95,"section":""}],"engine":"claude","engine_name":"Claude","stopped":false},
+                     {"role":"user","text":"And continuity?","when":"","tools":[]},
+                     {"role":"assistant","text":"Claude didn't answer.","when":"","tools":[],"failed":true}]}
+        """, as: Chat.self)
+        let turns = AskConversation.turns(of: chat)
+        #expect(turns.map(\.question) == ["What's a limit?", "And continuity?"])
+        #expect(turns[0].state == .done && turns[0].engine == "Claude" && turns[0].sources.first?.times == [95])
+        #expect(turns[1].state == .failed && turns[1].problem == "Claude didn't answer." && turns[1].answer.isEmpty)
+        #expect(ChatSummary(id: "c1", title: "", class: "", lecture: "", updated: "", kind: "ask").isAsk)
     }
 
     @Test func modelsRoundTripThroughTheCache() throws {

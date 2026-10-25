@@ -102,6 +102,13 @@ already Atkinson (`App/SystemLook.swift`). A toolbar button with words is not: i
 the label its style, `Button { … } label: { Text("Done").textStyle(.button) }` (`.nav` for Cancel and the like).
 Menus, alerts, confirmation dialogs and the keyboard stay the system's.
 
+**The AI marks** (`Resources/Assets.xcassets/Brands`, `brand-claude`, `brand-chatgpt`, `brand-gemini`, `brand-ollama`)
+are the desktop's (`engine/src/StudyStash.App/Assets/Brands`, read its README), unchanged: their owners' trademarks,
+never recoloured or redrawn, shown only in Ask to say which AI answers (`AskEngine`, from the library's `GET /ai`).
+They're the one place colour other than ink and a class's highlighter appears, and Gemini's own colours are the one
+exception to "no gradients". ChatGPT's and Ollama's have a light and a dark file. Gemini's is a picture WebKit made from
+the unchanged SVG (iOS's own SVG drawing leaves out its soft blends).
+
 ## Icons (`Icons.swift`, `Resources/Icons.xcassets`)
 
 ```swift
@@ -221,7 +228,12 @@ Button { } label: { row }.buttonStyle(.row)           // a whole row, washed whi
 RecordButton(state: .idle) { start() }                // .recording / .paused, words:, elapsed:, levels:, stop:
 RecordDot(state: .recording, mini: true)
 LevelBars(levels: recorder.levels)                    // three red bars
-AskBar(placeholder: "Ask anything about your notes", text: $q, scope: "All notes") { send() }
+AskBar(placeholder: "Ask anything", text: $q, busy: answering, onStop: { stop() }) {
+    Menu { … } label: { AskScopeChip(title: "All notes") }               // the scope chip, a native menu
+} onSend: { send() }                                  // one pill; empties itself when sent; Send is Stop while answering
+MarkdownText(answer, style: .lede, caret: writing)    // an AI's Markdown in the look; a caret while it's written
+BrandMark(.claude, size: 18)                          // the answering AI's own mark (Ask only), unchanged
+ThinkingMark(engine: .claude)                         // it thinking, as its own app shows it; still with Reduce Motion
 AskBarButton(placeholder: "Ask about this lecture", scope: "This lecture") { asking = true }
 EmptyText("No lectures yet. Record one here, or attach a recording.")
 EmptyState(title: "Can't reach your library", detail: "…", actionTitle: "Try again") { }   // replaces ContentUnavailableView
@@ -346,7 +358,14 @@ one) and `-quiet` (no notification prompt):
   `ask:class:<name>`, `add-files`, `import-audio`, `goodnotes`, `handwriting` (a new notebook each time), `notebook`,
   `study:<id>`, `quiz:<id>`, `uses`, `widgets` (`WidgetGallery`, in `Shared/WidgetGallery.swift`), `components:1…4`
   (every shared piece)
-- `-ask "<question>"` with `-tab ask`; `-unpaired` (setup, no `-demo`), with `-pair-code` its second step, or
+- `-ask "<question>"` with `-tab ask` (`-ask-new` starts with nothing asked); for Ask's states, `-ask-waiting` (it
+  stays asking: `-ask-stage reading|writing` for its later stages), `-ask-drive` (the words, and the demo's pace, as
+  over Google Drive), `-ask-pace slow` (a word at a time, to Stop), `-ask-fail` (no answer: the link's words, Try
+  again), `-ask-chats` (Chats open; `-ask-undo` with it, one deleted with Undo), `-ask-open <chat id>` (a kept chat
+  open: the demo's `demo-chat-chem`, `demo-chat-ibp`…), `-ask-typing "<text>"` (typed in the bar, the keyboard up),
+  `-ask-engine claude|codex|gemini|ollama` (which AI the demo says answers), `-ask-chips` (the alternative with three
+  short questions over the bar);
+  `-unpaired` (setup, no `-demo`), with `-pair-code` its second step, or
   `-pair-page others|laptop|connect|finding|connecting|camera-off|address|cant-reach|code|typing|wrong|uses|done` any
   page of it (`others` is Other ways, `laptop` is "Now connect your laptop" after Continue with Google);
   `-pair-scan '<scanned text>'` goes through setup as if that was scanned (the demo library's address,

@@ -12,17 +12,34 @@ final class DemoLibrary: URLProtocol, @unchecked Sendable {
     override class func canInit(with request: URLRequest) -> Bool { request.url?.host() == host }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
+    private let streaming = Mutex<Task<Void, Never>?>(nil)
+
     override func startLoading() {
         guard let url = request.url else { return }
-        let (status, type, body) = Self.answer(path: url.path(), query: URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? [],
-                                               method: request.httpMethod ?? "GET", body: Self.body(of: request))
+        let method = request.httpMethod ?? "GET", body = Self.body(of: request)
+        if method == "POST", url.path() == "/api/v2/ai/ask", let ask = Self.streamedAsk(body) {
+            // A question in words: answered as the library does, a piece at a time.
+            let client = Client(client: client, owner: self)
+            streaming.withLock { $0 = Task { await Self.stream(ask, url: url, client: client) } }
+            return
+        }
+        let (status, type, data) = Self.answer(path: url.path(), query: URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? [],
+                                               method: method, body: body)
         let response = HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1", headerFields: ["Content-Type": type])!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-        client?.urlProtocol(self, didLoad: body)
+        client?.urlProtocol(self, didLoad: data)
         client?.urlProtocolDidFinishLoading(self)
     }
 
-    override func stopLoading() {}
+    override func stopLoading() {
+        streaming.withLock { $0?.cancel() }
+    }
+
+    /// The loading system's side, for the task that streams an answer.
+    private struct Client: @unchecked Sendable {
+        let client: (any URLProtocolClient)?
+        let owner: URLProtocol
+    }
 
     static func body(of r: URLRequest) -> Data? {
         if let d = r.httpBody { return d }
@@ -98,7 +115,27 @@ final class DemoLibrary: URLProtocol, @unchecked Sendable {
         case ("GET", _) where path.hasPrefix("/api/v2/attachments/demo-board-") && path.hasSuffix("/raw"):
             return (200, "image/jpeg", DemoPhotos.picture(path))
         case ("GET", "/api/v2/chats"):
-            return json([])
+            return json(chats.withLock { $0 }.sorted { $0.updated > $1.updated }.map(\.listed))
+        case ("GET", _) where path.hasPrefix("/api/v2/chats/"):
+            let id = String(path.dropFirst("/api/v2/chats/".count))
+            guard let c = chats.withLock({ $0.first { $0.id == id } }) else { return json(["detail": "no such chat"], 404) }
+            return json(c.whole)
+        case ("DELETE", _) where path.hasPrefix("/api/v2/chats/"):
+            let id = String(path.dropFirst("/api/v2/chats/".count))
+            chats.withLock { all in
+                if let i = all.firstIndex(where: { $0.id == id }) { trashedChats.withLock { $0.append(all.remove(at: i)) } }
+            }
+            return json(["deleted": id])
+        case ("POST", _) where path.hasPrefix("/api/v2/chats/") && path.hasSuffix("/restore"):
+            let id = String(path.dropFirst("/api/v2/chats/".count).dropLast("/restore".count))
+            guard let back = trashedChats.withLock({ t in t.firstIndex { $0.id == id }.map { t.remove(at: $0) } }) else {
+                return json(["detail": "It's no longer kept, so it can't come back."], 404)
+            }
+            chats.withLock { $0.append(back) }
+            return json(back.listed)
+        case ("GET", "/api/v2/ai"):
+            // Which AI answers (`-ask-engine` in a debug build; Claude otherwise).
+            return json(["provider": answeringEngine.id, "jobs": ["ask": ["provider": answeringEngine.id, "model": "", "own": false]], "providers": []])
         case ("POST", "/api/v2/ai/ask"):
             return ask(sent["question"] as? String ?? "", lecture: sent["lecture"] as? String)
         case ("POST", "/api/v2/ai/warm"):
@@ -301,6 +338,227 @@ final class DemoLibrary: URLProtocol, @unchecked Sendable {
         ]
         let text = lines.compactMap { try? JSONSerialization.data(withJSONObject: $0) }.map { String(decoding: $0, as: UTF8.self) }.joined(separator: "\n") + "\n"
         return (200, "application/x-ndjson", Data(text.utf8))
+    }
+
+    // MARK: Ask, streamed, and its chats
+
+    /// A question in words, as it came: what it's about, and the chat it goes on.
+    struct StreamedAsk: Sendable {
+        var question: String
+        var lecture: String?
+        var chat: String?
+        var place: [String: String]
+    }
+
+    /// A question in words (Study's, which asks for JSON, is answered all at once).
+    static func streamedAsk(_ body: Data?) -> StreamedAsk? {
+        let sent = body.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]
+        guard let q = sent["question"] as? String, !q.contains("JSON") else { return nil }
+        return StreamedAsk(question: q, lecture: sent["lecture"] as? String, chat: sent["chat"] as? String,
+                           place: sent["place"] as? [String: String] ?? [:])
+    }
+
+    /// How fast the demo answers. Debug builds: `-ask-drive` as over Google Drive (a few seconds before the laptop
+    /// has it, a few more before the first words, then a sentence or so at a time), `-ask-pace slow` a word at a
+    /// time, `-ask-fail` not at all (the laptop or the library isn't there).
+    struct Pace: Sendable {
+        var taken: Duration = .zero
+        var reading: Duration = .milliseconds(700)
+        var every: Duration = .milliseconds(45)
+        var words = 3
+        var fails = false
+
+        static var now: Pace {
+            var p = Pace()
+            if DebugLaunch.flag("-ask-drive") {
+                p.taken = .milliseconds(2600); p.reading = .milliseconds(2400); p.every = .milliseconds(1600); p.words = 16
+            }
+            if DebugLaunch.value("-ask-pace") == "slow" { p.every = .milliseconds(350); p.words = 1 }
+            if DebugLaunch.flag("-ask-fail") { p.fails = true }
+            return p
+        }
+    }
+
+    /// Answer a question as the library streams one: the chat it's in, then the words a few at a time, then the
+    /// whole reply; kept in its chat. Stopped partway, what came is kept, said to be stopped.
+    private static func stream(_ ask: StreamedAsk, url: URL, client: Client) async {
+        let pace = Pace.now
+        func send(_ o: [String: Any]) {
+            guard let d = try? JSONSerialization.data(withJSONObject: o) else { return }
+            client.client?.urlProtocol(client.owner, didLoad: d + Data("\n".utf8))
+        }
+        do {
+            if pace.fails {
+                try await Task.sleep(for: .milliseconds(1500))
+                let words = DebugLaunch.flag("-ask-drive") ? DriveLink.notAnswering : APIError.unreachableLibrary.detail
+                client.client?.urlProtocol(client.owner, didFailWithError: NSError(domain: DriveLibrary.errorDomain, code: 1,
+                                                                                    userInfo: [NSLocalizedDescriptionKey: words]))
+                return
+            }
+            try await Task.sleep(for: pace.taken)
+            let head = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: ["Content-Type": "application/x-ndjson"])!
+            client.client?.urlProtocol(client.owner, didReceive: head, cacheStoragePolicy: .notAllowed)
+            let chat = ask.chat.map { keptChat($0, place: ask.place, first: ask.question) }
+            if let chat { send(["kind": "chat", "id": chat]) }
+            try await Task.sleep(for: pace.reading)
+            let (answer, sources) = demoAnswer(ask.question, lecture: ask.lecture)
+            var written = ""
+            do {
+                for piece in pieces(answer, words: pace.words) {
+                    try Task.checkCancellation()
+                    written += piece
+                    send(["kind": "text", "text": piece])
+                    try await Task.sleep(for: pace.every)
+                }
+            } catch {
+                if let chat, !written.isEmpty { keep(chat, ask.question, written, sources: [], stopped: true) }
+                throw error
+            }
+            if let chat { keep(chat, ask.question, answer, sources: sources, stopped: false) }
+            let (engine, name) = answeringEngine
+            var reply: [String: Any] = ["answer": answer, "sources": sources, "engine": engine, "engine_name": name, "asked": engine,
+                                        "asked_name": name, "fell_back": false, "why": ""]
+            if let chat { reply["chat"] = chat }
+            send(["kind": "done", "reply": reply])
+            client.client?.urlProtocolDidFinishLoading(client.owner)
+        } catch {
+            // Stopped: the phone went away.
+        }
+    }
+
+    /// The answer in the pieces it arrives in: a few words each.
+    static func pieces(_ text: String, words: Int) -> [String] {
+        var out: [String] = []
+        var piece = ""
+        var count = 0
+        for ch in text {
+            piece.append(ch)
+            if ch == " " || ch == "\n" {
+                count += 1
+                if count >= words { out.append(piece); piece = ""; count = 0 }
+            }
+        }
+        if !piece.isEmpty { out.append(piece) }
+        return out
+    }
+
+    /// The answers the demo gives: integration by parts unless the question is about memory, substitution, or what's
+    /// due. Each with its lecture and the moments it drew on.
+    static func demoAnswer(_ q: String, lecture: String?) -> (String, [[String: Any]]) {
+        let w = q.lowercased()
+        func source(_ id: String, _ at: Int, _ section: String = "Key points") -> [String: Any] {
+            let l = lectures.first { $0.id == id }
+            return ["id": id, "title": l?.title ?? "", "class": l?.cls ?? "", "date": l?.date ?? day(-1), "at": at, "section": section]
+        }
+        if lecture == nil, ["due", "next", "this week"].contains(where: w.contains) {
+            return ("**Quiz 4: Memory** is due tonight at 11:59 PM, and **Problem Set 6: Integration by Parts** on " + Format.words(.now.addingTimeInterval(2 * 86_400), "EEEE") + ".\n\n- For the quiz, go back over working memory (about four chunks) and the misinformation effect.\n- For the problem set, LIATE picks u; the tabular method is quickest when u is a polynomial.",
+                    [source("demo-psych-memory", 320), source("demo-calc-ibp", 220)])
+        }
+        if ["memory", "remember", "psych", "encod"].contains(where: w.contains) {
+            return ("Memory works in three stages: **encoding**, **storage** and **retrieval**.\n\n- Working memory holds about four chunks for a few seconds, and rehearsal keeps them there.\n- Processing for meaning sticks better than sound or look (levels of processing).\n- Recall is rebuilt each time, so questions asked afterwards can change it: Loftus and Palmer's *smashed* versus *hit*.",
+                    [source("demo-psych-memory", 320), source("demo-psych-memory", 1870)])
+        }
+        if ["sn1", "sn2", "substitution", "chem", "carbocation"].contains(where: w.contains) {
+            return ("Both swap a leaving group for a nucleophile; they differ in how many steps it takes.\n\n| | SN1 | SN2 |\n|---|---|---|\n| Steps | Two, through a carbocation | One backside attack |\n| Rate | k[RX] | k[RX][Nu⁻] |\n| Substrate | Tertiary | Methyl, primary |\n| Stereochemistry | Racemization | Inversion |\n\nIn the lecture: think of SN2 as an umbrella flipping inside out.",
+                    [source("demo-chem-sn", 480), source("demo-chem-sn", 1540)])
+        }
+        return ("Pick **u** with LIATE, the order from the lecture:\n\n1. **L**ogarithms\n2. **I**nverse trig\n3. **A**lgebraic, like x or x²\n4. **T**rig\n5. **E**xponentials\n\nWhichever comes first is u, and the rest is dv. For ∫x eˣ dx that's u = x and dv = eˣ dx, so\n\n$$\\int x e^x\\,dx = x e^x - \\int e^x\\,dx = e^x(x-1) + C$$\n\nWhen u is a polynomial, the tabular method is quicker.",
+                [source("demo-calc-ibp", 220), source("demo-calc-ibp", 1290, "Details and examples")])
+    }
+
+    /// One Ask chat the demo keeps, as the library lists it and gives it whole.
+    struct DemoChat: Sendable {
+        struct Message: Sendable {
+            var role, text, when: String
+            /// Its sources, as the library writes them (JSON).
+            var sources = Data("[]".utf8)
+            var stopped = false
+        }
+        var id, title, scope, cls, lecture, updated: String
+        var messages: [Message] = []
+
+        var listed: [String: Any] {
+            ["id": id, "title": title, "class": cls, "lecture": lecture, "updated": updated, "provider": "claude", "kind": "ask",
+             "scope": scope, "turns": messages.count / 2, "messages": NSNull()]
+        }
+        var whole: [String: Any] {
+            var w = listed
+            w["messages"] = messages.map { m -> [String: Any] in
+                var o: [String: Any] = ["role": m.role, "text": m.text, "when": m.when]
+                if m.role == "assistant" {
+                    o["sources"] = (try? JSONSerialization.jsonObject(with: m.sources)) ?? []
+                    o["engine"] = answeringEngine.id
+                    o["engine_name"] = answeringEngine.name
+                    o["stopped"] = m.stopped
+                    o["failed"] = false
+                }
+                return o
+            }
+            return w
+        }
+
+        /// A question and its answer, kept.
+        mutating func add(_ question: String, _ answer: String, sources: [[String: Any]], stopped: Bool, at when: String) {
+            messages.append(Message(role: "user", text: question, when: when))
+            messages.append(Message(role: "assistant", text: answer, when: when,
+                                    sources: (try? JSONSerialization.data(withJSONObject: sources)) ?? Data("[]".utf8), stopped: stopped))
+            updated = when
+        }
+    }
+
+    static let chats = Mutex<[DemoChat]>(seededChats)
+    /// Deleted, for Undo.
+    static let trashedChats = Mutex<[DemoChat]>([])
+
+    /// The AI the demo says answers: Claude, or in a debug build `-ask-engine claude|codex|gemini|ollama`.
+    static var answeringEngine: (id: String, name: String) {
+        switch DebugLaunch.value("-ask-engine") {
+        case "codex", "chatgpt": ("codex", "ChatGPT")
+        case "gemini": ("gemini", "Gemini")
+        case "ollama": ("ollama", "Ollama")
+        default: ("claude", "Claude")
+        }
+    }
+
+    /// The chat a question goes on: the one named, or a new one where it was asked.
+    static func keptChat(_ id: String, place: [String: String], first: String) -> String {
+        chats.withLock { all in
+            if id != "new", all.contains(where: { $0.id == id }) { return id }
+            let made = DemoChat(id: "demo-chat-" + UUID().uuidString.prefix(8).lowercased(), title: String(first.prefix(80)),
+                                scope: place["scope"] ?? "home", cls: place["class"] ?? "", lecture: place["lecture"] ?? "", updated: iso(0))
+            all.append(made)
+            return made.id
+        }
+    }
+
+    static func keep(_ chat: String, _ question: String, _ answer: String, sources: [[String: Any]], stopped: Bool) {
+        let data = (try? JSONSerialization.data(withJSONObject: sources)) ?? Data("[]".utf8)
+        chats.withLock { all in
+            guard let i = all.firstIndex(where: { $0.id == chat }) else { return }
+            all[i].messages.append(DemoChat.Message(role: "user", text: question, when: iso(0)))
+            all[i].messages.append(DemoChat.Message(role: "assistant", text: answer, when: iso(0), sources: data, stopped: stopped))
+            all[i].updated = iso(0)
+        }
+    }
+
+    /// Chats asked before: about a lecture this morning, a class last night, all the notes earlier in the week.
+    static var seededChats: [DemoChat] {
+        func at(_ days: Int, _ hour: Int, _ minute: Int) -> String {
+            let d = Calendar.current.date(bySettingHour: hour, minute: minute, second: 0, of: .now.addingTimeInterval(Double(days) * 86_400))!
+            return ISO8601DateFormatter().string(from: min(d, .now.addingTimeInterval(-600)))
+        }
+        func chat(_ id: String, _ q: String, scope: String, cls: String = "", lecture: String = "", _ when: String) -> DemoChat {
+            var c = DemoChat(id: id, title: q, scope: scope, cls: cls, lecture: lecture, updated: when)
+            let (a, s) = demoAnswer(q, lecture: lecture.isEmpty ? nil : lecture)
+            c.add(q, a, sources: s, stopped: false, at: when)
+            return c
+        }
+        return [
+            chat("demo-chat-ibp", "How do I pick u in integration by parts?", scope: "lecture", cls: "Calculus II", lecture: "demo-calc-ibp", at(0, 8, 12)),
+            chat("demo-chat-chem", "What's the difference between SN1 and SN2?", scope: "class", cls: "Organic Chemistry", at(-1, 20, 40)),
+            chat("demo-chat-memory", "Which lectures talk about memory?", scope: "home", at(-3, 14, 40)),
+            chat("demo-chat-due", "What's due this week, and which lectures help?", scope: "home", at(-5, 16, 30)),
+        ]
     }
 
     /// Each lecture's own flashcards and quiz.

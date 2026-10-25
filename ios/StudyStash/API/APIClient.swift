@@ -117,6 +117,10 @@ final class APIClient: Sendable {
         let bytes: URLSession.AsyncBytes, response: URLResponse
         do {
             (bytes, response) = try await session.bytes(for: req)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let e as URLError where e.code == .cancelled {
+            throw CancellationError()
         } catch {
             throw APIError.unreachable(error)
         }
@@ -246,10 +250,24 @@ final class APIClient: Sendable {
 
     // MARK: asking
 
-    struct AskBody: Encodable { var question: String; var lecture: String?; var `class`: String?; var stream = true }
+    struct AskBody: Encodable {
+        var question: String
+        var lecture: String?
+        var `class`: String?
+        var stream = true
+        /// The kept chat it goes on ("new" starts one where `place` says); nil keeps nothing.
+        var chat: String?
+        var place: AskPlace?
+        /// The conversation so far, for a library that doesn't keep it (one that does reads it from the chat).
+        var history: [AskHistoryTurn]?
+    }
 
-    func ask(_ question: String, lecture: String? = nil, class cls: String? = nil) async throws -> AsyncThrowingStream<AskEvent, Error> {
-        try await lines("/ai/ask", AskBody(question: question, lecture: lecture, class: cls), as: AskEvent.self)
+    /// Ask the library's AI, the answer streamed. `chat`: the kept conversation this goes on ("new" for a new one at
+    /// `place`); `history`: the turns before it, for a library too old to keep chats (it ignores what it doesn't know).
+    func ask(_ question: String, lecture: String? = nil, class cls: String? = nil, chat: String? = nil, place: AskPlace? = nil,
+             history: [AskHistoryTurn]? = nil) async throws -> AsyncThrowingStream<AskEvent, Error> {
+        try await lines("/ai/ask", AskBody(question: question, lecture: lecture, class: cls, chat: chat, place: place, history: history),
+                        as: AskEvent.self)
     }
 
     /// Let the engine that will answer get ready while the question is typed.
@@ -260,8 +278,22 @@ final class APIClient: Sendable {
     }
 
     func chats() async throws -> [ChatSummary] { try await get("/chats") }
+
+    /// The Ask conversations the library keeps (the phone's, and those asked on the computer), newest first. From
+    /// `GET /chats` as it is (over Google Drive, the copy on the phone answers it at once), Ask's own picked out.
+    func askChats() async throws -> [ChatSummary] { try await chats().filter(\.isAsk) }
     func chat(_ id: String) async throws -> Chat { try await get("/chats/\(Self.segment(id))") }
     func deleteChat(_ id: String) async throws { try await delete("/chats/\(Self.segment(id))") }
+
+    /// A deleted chat back (Undo), while the library still keeps it.
+    func restoreChat(_ id: String) async throws {
+        struct Empty: Encodable {}
+        struct Any_: Decodable {}
+        let _: Any_ = try await post("/chats/\(Self.segment(id))/restore", Empty())
+    }
+
+    /// Which AI does each job (Ask's is the one answering here).
+    func aiSettings() async throws -> AISettings { try await get("/ai") }
 
     struct ChatBody: Encodable { var message: String; var chat: String?; var `class`: String?; var lecture: String?; var edit = false }
 

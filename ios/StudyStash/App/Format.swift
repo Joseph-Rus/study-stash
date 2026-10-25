@@ -72,6 +72,17 @@ enum Format {
     /// A time of day: "9:30 AM", "11:59 PM".
     static func time(_ d: Date) -> String { words(d, "h:mm a") }
 
+    /// When a chat was last added to, as the desktop's Chats list says it: "Today 4:30 PM", "Yesterday 9:05 AM",
+    /// "Mon 4:30 PM" within the week, else "Mon 12 Oct".
+    static func chatWhen(_ d: Date, now: Date = .now) -> String {
+        switch -daysBetween(now, d) {
+        case 0: "Today " + time(d)
+        case 1: "Yesterday " + time(d)
+        case 2..<7: words(d, "EEE h:mm a")
+        default: words(d, "EEE d MMM")
+        }
+    }
+
     /// Home's title: "Monday, October 12".
     static func longDate(_ d: Date = .now) -> String { words(d, "EEEE, MMMM d") }
 
