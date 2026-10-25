@@ -572,6 +572,7 @@ private struct TurnView: View {
             HStack(spacing: 10) {
                 ThinkingMark(engine: engine, size: 22)
                 Text(stage.words(overDrive: overDrive)).textStyle(.body).foregroundStyle(.inkMuted)
+                    .thinkingShimmer(engine)
                     .contentTransition(.opacity)
                     .animation(.smooth, value: stage)
             }

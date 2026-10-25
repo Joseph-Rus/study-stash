@@ -36,7 +36,8 @@ don't make colours, fonts or icons of your own.
   never `.white` text on `.tint` or `.accentColor`.
 - **Words** are the desktop's (`Format`, `Nouns`): "Today", "Yesterday", "Wed 7 Oct", "7 Oct 2025"; "9:30 AM";
   "13 min", "1 h 12 min"; lecture / meeting / recording / notes. Plain, second person, no exclamation marks, no emoji.
-- **Motion**: pressing changes colour only; only the recording dot, the level and a caret loop. Respect Reduce Motion.
+- **Motion**: pressing changes colour only; only the recording dot, the level, a caret, the loader and Ask's thinking
+  marks loop. Respect Reduce Motion.
 - **Radius nests**: controls 8 → today's cell 10 → panels, the Ask bar, toasts 12 → the main sheet 14 → pills round.
 - It's still iOS: keep the tab bar, push navigation, sheets, swipe actions and the glass the system draws (tab bar,
   toolbars, menus, alerts, the keyboard). Restyle what's inside them. On an iPad (regular width) lean towards the
@@ -107,7 +108,9 @@ are the desktop's (`engine/src/StudyStash.App/Assets/Brands`, read its README), 
 never recoloured or redrawn, shown only in Ask to say which AI answers (`AskEngine`, from the library's `GET /ai`).
 They're the one place colour other than ink and a class's highlighter appears, and Gemini's own colours are the one
 exception to "no gradients". ChatGPT's and Ollama's have a light and a dark file. Gemini's is a picture WebKit made from
-the unchanged SVG (iOS's own SVG drawing leaves out its soft blends).
+the unchanged SVG (iOS's own SVG drawing leaves out its soft blends). While an AI thinks, Ask doesn't move its mark: `ThinkingMark` redraws how
+that product itself shows thinking (Claude Code's spinner and the Claude apps' spark, ChatGPT's dot, Gemini's sparkle,
+Ollama's braille spinner) from shapes, in its colours; `docs/thinking-animations.md` says what each is based on.
 
 ## Icons (`Icons.swift`, `Resources/Icons.xcassets`)
 
@@ -234,6 +237,8 @@ AskBar(placeholder: "Ask anything", text: $q, busy: answering, onStop: { stop() 
 MarkdownText(answer, style: .lede, caret: writing)    // an AI's Markdown in the look; a caret while it's written
 BrandMark(.claude, size: 18)                          // the answering AI's own mark (Ask only), unchanged
 ThinkingMark(engine: .claude)                         // it thinking, as its own app shows it; still with Reduce Motion
+Text("Reading your notes…").thinkingShimmer(engine)     // its status words shimmering as its own do (docs/thinking-animations.md)
+StudyLoader(.page)                                    // loading: three drops flowing together and apart; .inline, .screen; color:
 AskBarButton(placeholder: "Ask about this lecture", scope: "This lecture") { asking = true }
 EmptyText("No lectures yet. Record one here, or attach a recording.")
 EmptyState(title: "Can't reach your library", detail: "…", actionTitle: "Try again") { }   // replaces ContentUnavailableView

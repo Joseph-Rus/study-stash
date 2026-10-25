@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// The app's one loading mark, the desktop's Spinner: an arc going round a faint ring of its own colour, growing long
-/// and short again as it turns. In the colour it's given (ink by default; `.inkSubtle` beside muted words, `.surface`
-/// on an ink button). Reduce Motion: a still ring with a short arc. VoiceOver says "Loading" unless given words.
+/// The app's one loading mark: three drops drifting round each other, flowing together into one and parting again like
+/// liquid. In the colour it's given (ink by default; `.inkSubtle` beside muted words,
+/// `.surface` on an ink button), flat, no gradient. Reduce Motion: one still frame. VoiceOver says "Loading" unless
+/// given words.
 struct StudyLoader: View {
     enum Size {
         /// Beside words or inside a button: 14 points.
@@ -19,6 +20,7 @@ struct StudyLoader: View {
             case .screen: 34
             }
         }
+        /// The old ring's line width, kept for callers that size things by it.
         var thickness: CGFloat {
             switch self {
             case .inline: 2
@@ -40,17 +42,13 @@ struct StudyLoader: View {
 
     @Environment(\.accessibilityReduceMotion) private var still
 
-    /// The desktop's numbers (Spinner.cs).
-    private static let period = 1.4, shortest = 20.0, longest = 270.0, turnSeconds = 1.8, ringOpacity = 0.15
-    private static let stillAt = 1.06
-
     var body: some View {
         Group {
             if still {
-                ring(at: Self.stillAt)
+                drawing(at: nil)
             } else {
                 TimelineView(.animation) { context in
-                    ring(at: context.date.timeIntervalSinceReferenceDate)
+                    drawing(at: context.date.timeIntervalSinceReferenceDate)
                 }
             }
         }
@@ -59,38 +57,33 @@ struct StudyLoader: View {
         .accessibilityLabel(label)
     }
 
-    private func ring(at seconds: Double) -> some View {
-        let (start, sweep) = Self.pose(seconds)
-        let thickness = size.thickness
-        return Canvas { gc, area in
-            let r = min(area.width, area.height) / 2 - thickness / 2
-            let c = CGPoint(x: area.width / 2, y: area.height / 2)
-            let style = StrokeStyle(lineWidth: thickness, lineCap: .round)
-            gc.stroke(Path { $0.addArc(center: c, radius: r, startAngle: .zero, endAngle: .degrees(360), clockwise: false) },
-                      with: .color(color.opacity(Self.ringOpacity)), style: style)
-            gc.stroke(Path { $0.addArc(center: c, radius: r, startAngle: .degrees(start - 90),
-                                       endAngle: .degrees(start - 90 + sweep), clockwise: false) },
-                      with: .color(color), style: style)
-        }
+    private func drawing(at t: Double?) -> some View {
+        let color = color
+        return Canvas { gc, area in Self.liquid(t, color, &gc, area) }
     }
 
-    /// Where the arc begins (degrees clockwise from the top) and how far round it goes, `seconds` in.
-    static func pose(_ seconds: Double) -> (start: Double, sweep: Double) {
-        let grow = longest - shortest
-        let periods = seconds / period, done = periods.rounded(.down), into = periods - done
-        var back = done * grow + seconds / turnSeconds * 360
-        let front: Double
-        if into < 0.5 {
-            front = back + shortest + grow * ease(into * 2)
-        } else {
-            front = back + longest
-            back += grow * ease(into * 2 - 1)
+    /// Three drops drifting round each other, pulling together into one and parting again like liquid (the drops are
+    /// softened and cut at half, so where they meet they flow into one flat shape).
+    static func liquid(_ t: Double?, _ color: Color, _ gc: inout GraphicsContext, _ area: CGSize) {
+        let t = t ?? 0.85   // still: the three drops apart
+        let s = min(area.width, area.height), c = CGPoint(x: area.width / 2, y: area.height / 2)
+        let drop = s * 0.145
+        // How far out the drops are: together, apart, together, on a slow wave.
+        let wave: Double = 0.5 - 0.5 * cos(t * 2 * .pi / 2.4)
+        let apart: CGFloat = s * CGFloat(0.05 + 0.26 * wave)
+        gc.addFilter(.alphaThreshold(min: 0.5, color: color))
+        gc.addFilter(.blur(radius: s * 0.06))
+        gc.drawLayer { layer in
+            for i in 0..<3 {
+                let n = Double(i)
+                let wander: Double = 0.35 * sin(t * 1.3 + n * 2)
+                let a: Double = t * 2 * .pi / 1.9 + n * 2 * .pi / 3 + wander
+                let out: Double = 1 + 0.18 * sin(t * 2.1 + n * 1.7)
+                let r: CGFloat = apart * CGFloat(out)
+                let p = CGPoint(x: c.x + r * CGFloat(cos(a)), y: c.y + r * CGFloat(sin(a)))
+                let d: CGFloat = drop * CGFloat(1 + 0.1 * sin(t * 2.7 + n))
+                layer.fill(Path(ellipseIn: CGRect(x: p.x - d, y: p.y - d, width: d * 2, height: d * 2)), with: .color(.black))
+            }
         }
-        let start = back.truncatingRemainder(dividingBy: 360)
-        return (start < 0 ? start + 360 : start, front - back)
-    }
-
-    private static func ease(_ t: Double) -> Double {
-        t < 0.5 ? 4 * t * t * t : 1 - pow(-2 * t + 2, 3) / 2
     }
 }
