@@ -441,6 +441,11 @@ struct LectureView: View {
     /// none will be (the library's reason); the transcript under each.
     @ViewBuilder private func unwritten(_ l: Lecture) -> some View {
         VStack(alignment: .leading, spacing: 16) {
+            if Self.writing(l) {
+                Doodle("writing", height: 88, busy: true)
+            } else if l.status == "failed" {
+                Doodle("cracked", height: 88)
+            }
             Text(unwrittenWords(l))
                 .textStyle(.summary)
                 .foregroundStyle(.inkMuted)

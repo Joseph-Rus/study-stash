@@ -1,6 +1,6 @@
 import SwiftUI
 
-// Ask, as the chat screens of the Claude and ChatGPT apps have it, in Study Stash's look: no big title, the chats
+// Ask, as the chat screens of the Claude and ChatGPT apps have it, in Egghead Notes' look: no big title, the chats
 // before on the left, the answering AI's own mark and name in the middle, New chat on the right; a nearly empty page
 // until something's asked; the question in a quiet bubble on the right and the answer full width under it, the AI's
 // own thinking mark while there are no words yet, then the lectures it used as small chips, who answered, Copy and Ask
@@ -139,7 +139,7 @@ private struct AskThread: View {
                 VStack(alignment: .leading, spacing: 0) {
                     if noAI {
                         EmptyState(title: "Asking isn't set up yet",
-                                   detail: "On your computer, open Settings, then Your AI, and choose one.")
+                                   detail: "On your computer, open Settings, then Your AI, and choose one.", doodle: "thinking")
                     } else if conversation.turns.isEmpty {
                         start
                     }
@@ -269,13 +269,12 @@ private struct AskThread: View {
 
     // MARK: before anything's asked
 
-    /// The answering AI's mark and one line, in the middle of the page.
+    /// The egghead thinking, the answering AI's mark under him, and one line, in the middle of the page.
     private var start: some View {
         VStack(spacing: 16) {
+            Doodle("thinking", height: 96)
             if let engine = engines.engine {
-                BrandMark(engine, size: 44, relativeTo: .largeTitle)
-            } else {
-                StudyStashLogo(size: 48)
+                BrandMark(engine, size: 22, relativeTo: .title)
             }
             Text(emptyLine).textStyle(.title).foregroundStyle(.ink)
                 .multilineTextAlignment(.center)
@@ -472,8 +471,12 @@ private struct TurnView: View {
             if asking && turn.answer.isEmpty {
                 waiting
             } else if !turn.answer.isEmpty {
-                MarkdownText(shownAnswer, style: .lede)
-                    .accessibilityElement(children: .combine)
+                // The egghead answers: his face beside it.
+                HStack(alignment: .top, spacing: 10) {
+                    Doodle("head", height: 30).padding(.top, 2)
+                    MarkdownText(shownAnswer, style: .lede)
+                        .accessibilityElement(children: .combine)
+                }
                 if asking || pacing {
                     ThinkingMark(engine: engine, size: 18).padding(.top, -4)
                 }
@@ -570,6 +573,7 @@ private struct TurnView: View {
     private var waiting: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 10) {
+                Doodle("thinking", height: 44, busy: true)
                 ThinkingMark(engine: engine, size: 22)
                 Text(stage.words(overDrive: overDrive)).textStyle(.body).foregroundStyle(.inkMuted)
                     .thinkingShimmer(engine)

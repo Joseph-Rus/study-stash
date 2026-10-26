@@ -44,7 +44,7 @@ final class JourneyTests: XCTestCase {
         app.launchArguments = ["-unpaired", "-quiet", "-pair-scan", "https://demo.studystash.app/app/#code=000000"]
         app.launch()
         expect(app.staticTexts["Found Demo library"], "the code page, for a refused code", timeout: 15)
-        expect(app.staticTexts["That code isn't right, or it's more than ten minutes old. Make a new one in Study Stash's Settings."],
+        expect(app.staticTexts["That code isn't right, or it's more than ten minutes old. Make a new one in Egghead Notes' Settings."],
                "the library's words")
     }
 

@@ -62,6 +62,6 @@ struct RecordControl: ControlWidget {
             }
         }
         .displayName("Record")
-        .description("Starts recording in Study Stash, into the class on your calendar now.")
+        .description("Starts recording in Egghead Notes, into the class on your calendar now.")
     }
 }

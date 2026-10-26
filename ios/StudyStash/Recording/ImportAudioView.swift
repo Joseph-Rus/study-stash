@@ -94,7 +94,7 @@ struct ImportAudioView: View {
                 .disabled(progress != nil)
                 Rule()
 
-                Text("It's written down on this phone, then sent to \(app.libraryName), where its notes are written. From Voice Memos: tap ••• on a recording, then Share, then Study Stash.")
+                Text("It's written down on this phone, then sent to \(app.libraryName), where its notes are written. From Voice Memos: tap ••• on a recording, then Share, then Egghead Notes.")
                     .textStyle(.meta)
                     .foregroundStyle(.inkSubtle)
                     .fixedSize(horizontal: false, vertical: true)

@@ -68,7 +68,7 @@ import Testing
     }
 
     @Test func aRefusedCodeOpensTheCodePageWithTheLibrarysWords() async {
-        let words = "That code isn't right, or it's more than ten minutes old. Make a new one in Study Stash's Settings."
+        let words = "That code isn't right, or it's more than ten minutes old. Make a new one in Egghead Notes' Settings."
         let (page, joined) = await ScanPairing.next(base: base, library: library, code: "042917") { _ in
             throw APIError(status: 401, detail: words)
         }

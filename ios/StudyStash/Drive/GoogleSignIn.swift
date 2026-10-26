@@ -5,7 +5,7 @@ import Security
 import SwiftUI
 
 // Signing in to Google on the phone, for the phone over Google Drive (docs/phone-google.md): the system's sign-in
-// sheet (ASWebAuthenticationSession) with PKCE and the iOS client, no secret and no Google SDK. Only Study Stash's own
+// sheet (ASWebAuthenticationSession) with PKCE and the iOS client, no secret and no Google SDK. Only Egghead Notes' own
 // hidden folder in the student's Drive is asked for (drive.appdata), and their email to say which account it is.
 
 /// Why signing in or reaching Drive didn't work, in the student's words.
@@ -13,16 +13,16 @@ struct GoogleProblem: Error, LocalizedError, Equatable, Sendable {
     var words: String
     var errorDescription: String? { words }
 
-    static let school = GoogleProblem(words: "Your school's Google account doesn't allow Study Stash. Try a personal Gmail on both.")
-    static let noFolder = GoogleProblem(words: "Study Stash needs its folder in your Google Drive. Continue with Google again and leave the Google Drive box ticked.")
-    static let refused = GoogleProblem(words: "Google didn't let Study Stash in. Continue with Google again, and choose Allow.")
+    static let school = GoogleProblem(words: "Your school's Google account doesn't allow Egghead Notes. Try a personal Gmail on both.")
+    static let noFolder = GoogleProblem(words: "Egghead Notes needs its folder in your Google Drive. Continue with Google again and leave the Google Drive box ticked.")
+    static let refused = GoogleProblem(words: "Google didn't let Egghead Notes in. Continue with Google again, and choose Allow.")
     static let ended = GoogleProblem(words: "Your Google sign-in on this phone has ended. Continue with Google again.")
     static let offline = GoogleProblem(words: "This phone isn't online. Connect to the internet, then try again.")
-    static let notInThisBuild = GoogleProblem(words: "Continue with Google isn't set up in this copy of Study Stash yet.")
+    static let notInThisBuild = GoogleProblem(words: "Continue with Google isn't set up in this copy of Egghead Notes yet.")
     static let removed = GoogleProblem(words: "Your laptop removed this phone. Sign in again to use it.")
 }
 
-/// The iOS client Google gave Study Stash, from the build setting `GOOGLE_IOS_CLIENT_ID` (Info.plist `GoogleClientID`).
+/// The iOS client Google gave Egghead Notes, from the build setting `GOOGLE_IOS_CLIENT_ID` (Info.plist `GoogleClientID`).
 enum GoogleClient {
     static let scopes = "openid email https://www.googleapis.com/auth/drive.appdata"
     static let authorize = URL(string: "https://accounts.google.com/o/oauth2/v2/auth")!
@@ -112,7 +112,7 @@ actor GoogleTokens {
         if let secret = account.clientSecret { fields["client_secret"] = secret }
         let reply = try await GoogleSignIn.post(account.tokenURL ?? GoogleClient.token, fields, session: session)
         guard let token = reply.access_token else {
-            // The student took Study Stash's access away (or it ran out): signing in again is the way back.
+            // The student took Egghead Notes' access away (or it ran out): signing in again is the way back.
             throw reply.error == "invalid_grant" ? GoogleProblem.ended : GoogleProblem(words: reply.error_description ?? GoogleProblem.ended.words)
         }
         access = (token, .now.addingTimeInterval(Double(reply.expires_in ?? 3600)))
@@ -122,7 +122,7 @@ actor GoogleTokens {
     /// Drive said the token was no good: the next call refreshes it.
     func invalidate() { access = nil }
 
-    /// Take Study Stash's access away at Google (signing out), as far as Google can be reached.
+    /// Take Egghead Notes' access away at Google (signing out), as far as Google can be reached.
     func revoke() async {
         var r = URLRequest(url: GoogleClient.revoke)
         r.httpMethod = "POST"
@@ -180,7 +180,7 @@ enum GoogleSignIn {
         return try account(from: reply, client: client)
     }
 
-    /// The account the tokens are for, once Google's reply has everything Study Stash needs.
+    /// The account the tokens are for, once Google's reply has everything Egghead Notes needs.
     static func account(from reply: TokenReply, client: String) throws -> GoogleAccount {
         if let error = reply.error { throw problem(for: error) }
         guard let refresh = reply.refresh_token else { throw GoogleProblem.refused }

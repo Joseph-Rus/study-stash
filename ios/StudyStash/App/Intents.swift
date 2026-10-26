@@ -1,17 +1,17 @@
 import AppIntents
 import Foundation
 
-/// "Ask Study Stash …": a question answered from your notes and lectures, read out or shown by Siri.
+/// "Ask Egghead Notes …": a question answered from your notes and lectures, read out or shown by Siri.
 struct AskIntent: AppIntent {
     static let title: LocalizedStringResource = "Ask about my notes"
-    static let description = IntentDescription("Answers a question from your Study Stash notes and lectures.")
+    static let description = IntentDescription("Answers a question from your Egghead Notes notes and lectures.")
 
     @Parameter(title: "Question", requestValueDialog: "What do you want to know?")
     var question: String
 
     func perform() async throws -> some IntentResult & ProvidesDialog & ReturnsValue<String> {
         guard let api = await AppModel.current?.api else {
-            return .result(value: "", dialog: "Open Study Stash and add this phone to your library first.")
+            return .result(value: "", dialog: "Open Egghead Notes and add this phone to your library first.")
         }
         var answer = ""
         do {

@@ -126,7 +126,7 @@ struct SettingsTab: View {
                         Text("Connect your computer to read your own lectures here, and record into your library.")
                             .font(.atkinson(13, relativeTo: .footnote)).foregroundStyle(.inkMuted)
                             .fixedSize(horizontal: false, vertical: true)
-                        // Ends the demo and goes to setup's "Open Study Stash on your computer" step.
+                        // Ends the demo and goes to setup's "Open Egghead Notes on your computer" step.
                         Button("Connect your computer") { Task { await app.endDemo() } }
                             .buttonStyle(.pill(small: true, ink: true))
                             .padding(.top, 10)
@@ -199,7 +199,7 @@ struct SettingsTab: View {
                 Say(waiting == 1 ? "One change from this \(device) is on its way to your laptop. It's made when your laptop is on."
                     : "\(waiting) changes from this \(device) are on their way to your laptop. They're made when your laptop is on.")
             }
-            Say("Your notes reach this \(device) through a private Study Stash folder in your Google Drive that only Study Stash can see.")
+            Say("Your notes reach this \(device) through a private Egghead Notes folder in your Google Drive that only Egghead Notes can see.")
         }
     }
 
@@ -209,9 +209,9 @@ struct SettingsTab: View {
         return Date.now.timeIntervalSince(seen) < 180 ? .connected : .unreachable
     }
 
-    /// "Study Stash 0.17.3", or when it's away, "Your laptop was last here 3 hours ago."
+    /// "Egghead Notes 0.17.3", or when it's away, "Your laptop was last here 3 hours ago."
     private var laptopDetail: String {
-        let version = app.drive?.version.flatMap { $0.isEmpty ? nil : "Study Stash \($0)" } ?? ""
+        let version = app.drive?.version.flatMap { $0.isEmpty ? nil : "Egghead Notes \($0)" } ?? ""
         guard let seen = app.drive?.seen, laptopReach != .connected else { return version }
         return "Your laptop was last here \(Self.ago(seen)). New notes show when it's on."
     }
@@ -228,9 +228,9 @@ struct SettingsTab: View {
     private var libraryDetail: String {
         switch reach {
         case .unreachable:
-            "Can’t reach it right now. This \(device) reaches your computer through Tailscale: turn it on here and on your computer, and keep Study Stash open there. Recordings wait on this \(device) until then."
+            "Can’t reach it right now. This \(device) reaches your computer through Tailscale: turn it on here and on your computer, and keep Egghead Notes open there. Recordings wait on this \(device) until then."
         case .connected, .checking:
-            me.map { "Study Stash \($0.library.version)" } ?? ""
+            me.map { "Egghead Notes \($0.library.version)" } ?? ""
         }
     }
 
@@ -351,7 +351,7 @@ struct SettingsTab: View {
                 HStack(spacing: 14) {
                     StudyStashLogo(size: 48)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Study Stash").textStyle(.title).foregroundStyle(.ink)
+                        Text("Egghead Notes").textStyle(.title).foregroundStyle(.ink)
                         Text(versionLine).textStyle(.meta).foregroundStyle(.inkMuted)
                     }
                     .accessibilityElement(children: .combine)

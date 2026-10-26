@@ -307,7 +307,7 @@ final class APIClient: Sendable {
         return try await post("/classes/alias", Body(class: cls, alias: alias, remove: remove))
     }
 
-    /// What Study Stash is for: not a student, and it's folders, without Canvas.
+    /// What Egghead Notes is for: not a student, and it's folders, without Canvas.
     func setUses(_ uses: [String]) async throws -> LibraryOverview {
         struct Body: Encodable { var uses: [String] }
         return try await post("/uses", Body(uses: uses))

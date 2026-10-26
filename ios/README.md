@@ -1,4 +1,4 @@
-# Study Stash for iPhone and iPad
+# Egghead Notes for iPhone and iPad
 
 The native app (SwiftUI, iOS 26+). It reads the library on the student's laptop through their own Google Drive
 (Continue with Google, `docs/phone-google.md`), or, like the phone web app in `web/`, over Tailscale through
@@ -21,7 +21,7 @@ same account (or scan the laptop's QR code, `studystash://google?account=…`). 
 `project.yml` (`GOOGLE_IOS_CLIENT_ID` and its reversed form `GOOGLE_IOS_URL_SCHEME`); until then it's a placeholder
 and Continue with Google says it isn't set up.
 
-Over Tailscale (Other ways): in Study Stash on the computer, Settings → Phone → **Add a phone**. The app scans that QR
+Over Tailscale (Other ways): in Egghead Notes on the computer, Settings → Phone → **Add a phone**. The app scans that QR
 code (or takes the address typed in), then the 6-digit code.
 
 In the simulator there's no camera. A debug build takes launch arguments instead:

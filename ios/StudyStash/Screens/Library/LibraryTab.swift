@@ -200,7 +200,7 @@ private struct LibraryHome: View {
         Button { askingUses = true } label: {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Tell Study Stash what it's for").textStyle(.title).foregroundStyle(.ink)
+                    Text("Tell Egghead Notes what it's for").textStyle(.title).foregroundStyle(.ink)
                     Text("So it calls things by the right names: lectures and classes, or meetings and folders.")
                         .textStyle(.summary).foregroundStyle(.inkMuted)
                         .fixedSize(horizontal: false, vertical: true)

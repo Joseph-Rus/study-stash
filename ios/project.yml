@@ -1,4 +1,4 @@
-# Study Stash for iPhone and iPad. `xcodegen` turns this into StudyStash.xcodeproj (not checked in).
+# Egghead Notes for iPhone and iPad. `xcodegen` turns this into StudyStash.xcodeproj (not checked in).
 name: StudyStash
 options:
   bundleIdPrefix: app.studystash
@@ -37,14 +37,14 @@ targets:
         TARGETED_DEVICE_FAMILY: "1,2"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_CFBundleDisplayName: Study Stash
+        INFOPLIST_KEY_CFBundleDisplayName: Egghead Notes
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: UIInterfaceOrientationPortrait
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
-        INFOPLIST_KEY_NSCameraUsageDescription: Take photos of the whiteboard to add to your lecture's notes, and scan the QR code Study Stash shows on your computer to add this phone.
-        INFOPLIST_KEY_NSMicrophoneUsageDescription: Record lectures so Study Stash can write notes from them.
+        INFOPLIST_KEY_NSCameraUsageDescription: Take photos of the whiteboard to add to your lecture's notes, and scan the QR code Egghead Notes shows on your computer to add this phone.
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: Record lectures so Egghead Notes can write notes from them.
         INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: Write down what's said in a lecture, on this phone.
-        INFOPLIST_KEY_NSLocalNetworkUsageDescription: Reach the Study Stash library on your computer.
+        INFOPLIST_KEY_NSLocalNetworkUsageDescription: Reach the Egghead Notes library on your computer.
         # Continue with Google (the phone over Google Drive, docs/phone-google.md): the iOS client Google Cloud gave
         # for bundle app.studystash.ios in project study-stash-app, and the same id turned round (Google's redirect
         # scheme for it). Not secret: every copy of the app carries it. Both are placeholders until the client is
@@ -124,7 +124,7 @@ targets:
         PRODUCT_NAME: StudyStashWidgets
         CODE_SIGN_ENTITLEMENTS: StudyStashWidgets/StudyStashWidgets.entitlements
         GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_CFBundleDisplayName: Study Stash
+        INFOPLIST_KEY_CFBundleDisplayName: Egghead Notes
     info:
       path: StudyStashWidgets/Info.plist
       properties:

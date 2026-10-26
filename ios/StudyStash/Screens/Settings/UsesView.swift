@@ -48,7 +48,7 @@ struct UsesView: View {
     private var page: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                Text(onboarding ? "What will you use Study Stash for?" : "What it’s for")
+                Text(onboarding ? "What will you use Egghead Notes for?" : "What it’s for")
                     .textStyle(onboarding ? .docTitle : .date)
                     .foregroundStyle(.ink)
                     .accessibilityAddTraits(.isHeader)

@@ -279,7 +279,11 @@ enum Thinking {
     private static func dots(_ t: Double?, _ gc: inout GraphicsContext, _ c: CGPoint, _ s: CGFloat) {
         let d = s * 0.22, gap = s * 0.12
         for i in 0..<3 {
-            let phase = t.map { 0.5 + 0.5 * sin(($0 - Double(i) * 0.18) * 2 * .pi / 1.2) } ?? 1
+            // Typed out: as one expression the compiler gave up on it.
+            let phase: Double = t.map { (now: Double) -> Double in
+                let turn: Double = (now - Double(i) * 0.18) * 2 * Double.pi / 1.2
+                return 0.5 + 0.5 * sin(turn)
+            } ?? 1
             let x = c.x + CGFloat(i - 1) * (d + gap)
             var g = gc
             g.opacity = 0.35 + 0.65 * phase

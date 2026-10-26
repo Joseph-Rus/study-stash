@@ -69,7 +69,7 @@ final class Resource<T: Codable & Sendable> {
             error = e
         } catch {
             stale = value != nil
-            self.error = APIError(status: -1, detail: "The library sent something this app couldn't read. Update Study Stash on your computer and here.")
+            self.error = APIError(status: -1, detail: "The library sent something this app couldn't read. Update Egghead Notes on your computer and here.")
         }
     }
 }

@@ -1,6 +1,6 @@
 import Foundation
 
-/// A file in Study Stash's hidden folder.
+/// A file in Egghead Notes' hidden folder.
 struct DriveFile: Sendable, Equatable {
     var id: String
     var name: String
@@ -16,7 +16,7 @@ enum DriveError: Error, Equatable {
     case refused(Int, String)
 }
 
-/// Study Stash's hidden folder in the student's Google Drive (the appDataFolder): what the phone does with it. One
+/// Egghead Notes' hidden folder in the student's Google Drive (the appDataFolder): what the phone does with it. One
 /// implementation talks to Google; the tests have one in memory.
 protocol DriveFiles: Sendable {
     /// The id of the file called `name`, or nil when there's none.

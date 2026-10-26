@@ -2,7 +2,7 @@ import Foundation
 
 /// Where a library might be, from what the student scanned or pasted: the QR code in Settings → Add a phone
 /// ("http://100.64.0.1:8787/app/?https=https%3A%2F%2Fmac.tail.ts.net%3A8443%2Fapp%2F"), either of those addresses
-/// alone, or a bare host ("mac.tail.ts.net:8443", "100.64.0.1:8787"). A computer on a newer Study Stash ends the QR
+/// alone, or a bare host ("mac.tail.ts.net:8443", "100.64.0.1:8787"). A computer on a newer Egghead Notes ends the QR
 /// code's address with the pairing code too ("…%2Fapp%2F#code=042917"), so the phone needn't ask for it.
 ///
 /// `candidates` are the API roots to try, best first: the https one (Tailscale Serve) before the plain Tailscale IP.

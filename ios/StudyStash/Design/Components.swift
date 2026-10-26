@@ -8,7 +8,7 @@ import SwiftUI
 
 // MARK: - The logo
 
-/// Study Stash's own logo, the app icon (the navy "S." cut into a paper tile; copper on black in dark), with the app
+/// Egghead Notes' own logo, the app icon (Eli's egghead, glasses and bow tie, on a paper tile), with the app
 /// icon's rounded corners: wherever the app shows its logo (setup, pairing, About). Never a stand-in drawn some other
 /// way. `size` is its width and height in points.
 struct StudyStashLogo: View {
@@ -20,7 +20,7 @@ struct StudyStashLogo: View {
             .frame(width: size, height: size)
             .clipShape(.rect(cornerRadius: size * 0.2237, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: size * 0.2237, style: .continuous).strokeBorder(.line))
-            .accessibilityLabel("Study Stash")
+            .accessibilityLabel("Egghead Notes")
     }
 }
 
@@ -772,16 +772,49 @@ struct EmptyText: View {
     }
 }
 
-/// A screen with nothing to show, or that couldn't load: a heading, a sentence, and what to do about it. No icon.
-/// Replaces ContentUnavailableView.
+/// One of the egghead's doodles (Eli's drawing, and the ones drawn from it: Assets.xcassets/Doodles, written by
+/// tools/egghead/make_art.py), `height` points tall: "sleepy", "cracked", "thinking", "writing", "listening"… `busy`
+/// brings him to life while something's happening: a slow bob and rock, still when Reduce Motion is on.
+struct Doodle: View {
+    var name: String
+    var height: CGFloat = 96
+    var busy = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var up = false
+
+    init(_ name: String, height: CGFloat = 96, busy: Bool = false) {
+        self.name = name
+        self.height = height
+        self.busy = busy
+    }
+
+    var body: some View {
+        let moving = busy && !reduceMotion
+        Image("doodle-\(name)")
+            .resizable()
+            .scaledToFit()
+            .frame(height: height)
+            .rotationEffect(.degrees(moving && up ? -2 : 0), anchor: .bottom)
+            .offset(y: moving && up ? -height * 0.04 : 0)
+            .animation(moving ? .easeInOut(duration: 1.2).repeatForever(autoreverses: true) : .default, value: up)
+            .onAppear { up = moving }
+            .onChange(of: moving) { _, now in up = now }
+            .accessibilityHidden(true)
+    }
+}
+
+/// A screen with nothing to show, or that couldn't load: the egghead (when it has a `doodle`), a heading, a sentence,
+/// and what to do about it. Replaces ContentUnavailableView.
 struct EmptyState: View {
     var title: String
     var detail: String?
     var actionTitle: String?
     var action: (() -> Void)?
+    var doodle: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
+            if let doodle { Doodle(doodle, height: 104).padding(.bottom, 8) }
             Text(title).textStyle(.h2).foregroundStyle(.ink)
             if let detail, !detail.isEmpty { EmptyText(detail) }
             if let actionTitle, let action {
@@ -803,9 +836,8 @@ struct Loaded<T: Codable & Sendable, Content: View>: View {
         if let value = resource.value {
             content(value)
         } else if let error = resource.error {
-            EmptyState(title: error.unreachable ? "Can't reach your library" : failure, detail: error.detail, actionTitle: "Try again") {
-                Task { await resource.load() }
-            }
+            EmptyState(title: error.unreachable ? "Can't reach your library" : failure, detail: error.detail, actionTitle: "Try again",
+                       action: { Task { await resource.load() } }, doodle: error.unreachable ? "sleepy" : "cracked")
         } else {
             StudyLoader(.page, color: .inkSubtle).frame(maxWidth: .infinity, minHeight: 200)
         }
@@ -813,7 +845,7 @@ struct Loaded<T: Codable & Sendable, Content: View>: View {
 }
 
 /// A short message floating at the foot of the screen, as the desktop's: "Moved to Calculus II. Undo", or a title
-/// with a sentence under it ("Recording saved" / "Study Stash is writing it down…"). Words in ink, the sentence muted,
+/// with a sentence under it ("Recording saved" / "Egghead Notes is writing it down…"). Words in ink, the sentence muted,
 /// an optional link at the end, on a white panel lifted on its shadow.
 struct Toast: View {
     var text: String
