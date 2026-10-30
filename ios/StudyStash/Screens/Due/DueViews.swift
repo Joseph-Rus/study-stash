@@ -342,7 +342,7 @@ private struct DuePage: View {
                     StudyLoader(.page, color: .inkSubtle).frame(maxWidth: .infinity, minHeight: 240)
                 } else if noCanvas {
                     EmptyState(title: "Nothing to show yet",
-                               detail: "Link Canvas in Egghead Notes on your computer, in Settings, then Canvas. What's due shows up here.",
+                               detail: "Link Canvas in Syft Notes on your computer, in Settings, then Canvas. What's due shows up here.",
                                doodle: "sleepy")
                 } else {
                     lede(book).padding(.top, Space.s2)

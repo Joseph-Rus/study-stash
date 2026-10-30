@@ -2,7 +2,7 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- Egghead Notes talks only to the student's own library, on their own computer: nothing is collected or tracked. -->
+	<!-- Syft Notes talks only to the student's own library, on their own computer: nothing is collected or tracked. -->
 	<key>NSPrivacyTracking</key>
 	<false/>
 	<key>NSPrivacyTrackingDomains</key>

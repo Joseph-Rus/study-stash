@@ -2,6 +2,8 @@
 
 ## Once
 
+The app's name in App Store Connect (App Information → Name) is set by hand there, not by this repo; it must be "Syft Notes" (the home-screen name comes from `project.yml`).
+
 1. **Xcode → Settings → Accounts**: sign in with the Apple ID on the developer team in `project.yml`
    (`DEVELOPMENT_TEAM`, joey russell G67978NLXW), as Account Holder or Admin, so Xcode can make the distribution
    certificate and profiles itself. Done on Joey's Mac by 2026-10-23: `app.studystash.ios` and
@@ -17,7 +19,7 @@
    `PrivacyInfo.xcprivacy` says the same. The AI that writes notes and answers questions runs from that library, under
    the student's own account (or on the computer with Ollama), and the privacy policy says so.
 5. **TestFlight → Test Information** (needed before external testers, not for internal ones):
-   - **Beta App Description**: "Egghead Notes keeps your lectures. Record a class on your phone, and your computer
+   - **Beta App Description**: "Syft Notes keeps your lectures. Record a class on your phone, and your computer
      writes study notes from it; read them, study with flashcards and quizzes, ask questions about your lectures,
      see what's due, and write notes by hand in notebooks. This beta has the new look and handwritten notebooks."
    - **Feedback Email**: an address you read.
@@ -25,7 +27,7 @@
    - **Beta App Review Information**: contact name, phone (international format, +1…) and email; **Sign-in
      required: off**; and these notes:
 
-     > Egghead Notes is the phone half of a free, open-source app: it reads a lecture library that runs on the user's
+     > Syft Notes is the phone half of a free, open-source app: it reads a lecture library that runs on the user's
      > own computer (Mac or Windows), reached over their private Tailscale network. There are no accounts.
      >
      > To review it without a computer, tap **Try it with sample classes** on the first screen. It opens a sample
@@ -61,10 +63,10 @@ It archives, signs and uploads, numbering the build itself. Then in App Store Co
 App Store Connect → the app → **TestFlight** → **Test Information** (once), then a group under **External Testing**
 with the build, then **Submit for Review**.
 
-- **Beta App Description:** Egghead Notes records your lectures and turns them into notes on your computer. This app
+- **Beta App Description:** Syft Notes records your lectures and turns them into notes on your computer. This app
   is its companion: read your notes and lectures, see what's due, ask questions about your classes, record a lecture
   on the phone (it's written down on the phone), and take whiteboard photos that go into your notes. It links to
-  Egghead Notes on your computer through your own Google Drive.
+  Syft Notes on your computer through your own Google Drive.
 - **What to Test** (per build): record a lecture on the phone (it keeps going while you take a whiteboard photo);
   Ask a question, including "what's due this week?"; take whiteboard photos while your computer records; open a
   lecture's notes and its photo strip. Tell us anything that's confusing, slow or wrong.
@@ -73,8 +75,8 @@ with the build, then **Submit for Review**.
 - **Review notes:**
   > No account is needed to review the app. On the first screen tap **Other ways → Try it with sample classes**: the
   > whole app runs on sample classes stored on the phone (Home, a lecture's notes, Due, Ask, Search, recording).
-  > For real use the app pairs with Egghead Notes on the student's own computer. "Continue with Google" is not an
-  > account with us: it only lets the app reach a private Egghead Notes folder in the student's own Google Drive
+  > For real use the app pairs with Syft Notes on the student's own computer. "Continue with Google" is not an
+  > account with us: it only lets the app reach a private Syft Notes folder in the student's own Google Drive
   > (Google's application data folder scope), which their computer also uses. So it isn't a sign-in service under
   > guideline 4.8. The microphone is used only while recording; speech is written down on the device; the camera is
   > used only to take whiteboard photos.

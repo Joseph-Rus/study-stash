@@ -29,7 +29,7 @@ don't make colours, fonts or icons of your own.
   across or down a view, no glowing halos. Flat token colours only. (The only soft edge is a floating thing's
   shadow, `.lifted(...)`.)
 - **The real logo, never a stand-in.** Wherever the app shows its logo (setup, pairing, About), it's
-  `StudyStashLogo(size:)`: the app icon itself (Eli's egghead on a paper tile, on black in dark), with
+  `StudyStashLogo(size:)`: the app icon itself (the pixel s: on a white tile, on ink in dark), with
   the app icon's corners. Never an SF Symbol, a Lucide icon, or a letter or shape drawn to look like it.
 - **No prominent system buttons.** `.borderedProminent` and `.glassProminent` fill with the tint (ink) and write in
   white, which disappears on dark's light ink: use `.pill(ink: true)` (ink filled, the page's colour on it). Likewise
@@ -188,7 +188,7 @@ It refuses a name the desktop already has, and checks every desktop icon still m
 | `arrow.clockwise` | `refresh` |
 | `arrow.up.circle`, `tray.and.arrow.up(.fill)` | `upload` |
 | `tray` | `inbox` (Unsorted) |
-| `wand.and.stars` | `drive_file_move` (file events in a class); `inbox` ("Let Egghead Notes sort it") |
+| `wand.and.stars` | `drive_file_move` (file events in a class); `inbox` ("Let Syft Notes sort it") |
 | `icloud.slash` | `cloud_off` |
 | `wifi.slash` | `wifi_off` |
 | `icloud.and.arrow.up` | `cloud_upload` |

@@ -8,7 +8,7 @@ import SwiftUI
 
 // MARK: - The logo
 
-/// Egghead Notes' own logo, the app icon (Eli's egghead, glasses and bow tie, on a paper tile), with the app
+/// Syft Notes' own logo, the app icon (Eli's egghead, glasses and bow tie, on a paper tile), with the app
 /// icon's rounded corners: wherever the app shows its logo (setup, pairing, About). Never a stand-in drawn some other
 /// way. `size` is its width and height in points.
 struct StudyStashLogo: View {
@@ -20,7 +20,7 @@ struct StudyStashLogo: View {
             .frame(width: size, height: size)
             .clipShape(.rect(cornerRadius: size * 0.2237, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: size * 0.2237, style: .continuous).strokeBorder(.line))
-            .accessibilityLabel("Egghead Notes")
+            .accessibilityLabel("Syft Notes")
     }
 }
 
@@ -845,7 +845,7 @@ struct Loaded<T: Codable & Sendable, Content: View>: View {
 }
 
 /// A short message floating at the foot of the screen, as the desktop's: "Moved to Calculus II. Undo", or a title
-/// with a sentence under it ("Recording saved" / "Egghead Notes is writing it down…"). Words in ink, the sentence muted,
+/// with a sentence under it ("Recording saved" / "Syft Notes is writing it down…"). Words in ink, the sentence muted,
 /// an optional link at the end, on a white panel lifted on its shadow.
 struct Toast: View {
     var text: String
