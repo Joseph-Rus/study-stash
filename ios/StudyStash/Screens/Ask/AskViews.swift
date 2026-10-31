@@ -139,7 +139,7 @@ private struct AskThread: View {
                 VStack(alignment: .leading, spacing: 0) {
                     if noAI {
                         EmptyState(title: "Asking isn't set up yet",
-                                   detail: "On your computer, open Settings, then Your AI, and choose one.", doodle: "thinking")
+                                   detail: "On your computer, open Settings, then Your AI, and choose one.", mark: .oddOneOut)
                     } else if conversation.turns.isEmpty {
                         start
                     }
@@ -269,10 +269,10 @@ private struct AskThread: View {
 
     // MARK: before anything's asked
 
-    /// The egghead thinking, the answering AI's mark under him, and one line, in the middle of the page.
+    /// The pixel s, the answering AI's mark under it, and one line, in the middle of the page.
     private var start: some View {
         VStack(spacing: 16) {
-            Doodle("thinking", height: 96)
+            SyftMark(height: 96)
             if let engine = engines.engine {
                 BrandMark(engine, size: 22, relativeTo: .title)
             }
@@ -471,9 +471,9 @@ private struct TurnView: View {
             if asking && turn.answer.isEmpty {
                 waiting
             } else if !turn.answer.isEmpty {
-                // The egghead answers: his face beside it.
+                // The pixel s beside the answer.
                 HStack(alignment: .top, spacing: 10) {
-                    Doodle("head", height: 30).padding(.top, 2)
+                    SyftMark(height: 30, tile: .circle).padding(.top, 2)
                     MarkdownText(shownAnswer, style: .lede)
                         .accessibilityElement(children: .combine)
                 }
@@ -573,7 +573,7 @@ private struct TurnView: View {
     private var waiting: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 10) {
-                Doodle("thinking", height: 44, busy: true)
+                SyftLoader(.hoppingBits, height: 18)
                 ThinkingMark(engine: engine, size: 22)
                 Text(stage.words(overDrive: overDrive)).textStyle(.body).foregroundStyle(.inkMuted)
                     .thinkingShimmer(engine)

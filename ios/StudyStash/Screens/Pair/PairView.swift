@@ -990,13 +990,20 @@ private struct SetupScreen<Content: View, Foot: View>: View {
         let margin = regular ? Space.s10 : Space.pageCompact
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                if logo { Doodle("hello", height: 120).padding(.bottom, 24) }
+                if logo { SyftHello(height: 120).padding(.bottom, 24) }
                 if let step {
                     Text(step).textStyle(.meta).foregroundStyle(.inkSubtle).padding(.bottom, 6)
                 }
-                Text(title).textStyle(logo ? .date : .docTitle).foregroundStyle(.ink)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityAddTraits(.isHeader)
+                // The welcome's title is the app's name: its wordmark.
+                Group {
+                    if logo {
+                        SyftWordmark(size: 40).accessibilityLabel(title)
+                    } else {
+                        Text(title).textStyle(.docTitle).foregroundStyle(.ink)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .accessibilityAddTraits(.isHeader)
                 if let lede {
                     Text(lede).textStyle(.lede).foregroundStyle(.inkMuted)
                         .fixedSize(horizontal: false, vertical: true)

@@ -251,6 +251,28 @@ TopicChips(topics: l.topics)                          // plain muted words, part
 Loaded(resource: r) { value in … }                    // loading / failed / loaded, in the look
 ```
 
+The pixel s (`Design/Syft.swift`, Joey's Pixel Sift boards; colours `SyftPalette` in Theme.swift; the same cells and
+keyframes as the phone web app's `web/src/ui/syftCells.ts` and `styles/syft.css`). All of them hold still with Reduce
+Motion; `-show components:5` shows them side by side, `-splash-at 1.5` holds the start splash at that second.
+
+```swift
+SyftMark(height: 96)                                  // the white tile's look in light, the dark tile's (with its mesh) in dark
+SyftMark(height: 96, oddOneOut: true)                 // its top right cell popped out: empty pages, problems
+SyftMark(height: 96, mesh: true)                      // with the light mesh (P6), or the night one in dark (P3)
+SyftMark(height: 30, tile: .circle)                   // beside an answer; .square: on the app icon's tile
+SyftWordmark(size: 40)                                // "syft notes" in Archivo
+SyftLoader(.pathTrace, height: 88)                    // a page waiting (notes being written, a recording: running:)
+SyftLoader(.hoppingBits, height: 18)                  // an answer on its way, inline
+SyftLoader(.pixelProgress, progress: 0.4)             // imports and syncing; without progress it loops
+SyftLoader(.rowShuffle)                               // what .syftRefreshable { await load() } shows when pulled
+SyftHello(height: 120)                                // setup's welcome: S3 Pop Back, once
+EmptyState(title: "…", detail: "…", mark: .oddOneOut) // with the s over it (.mark, .oddOneOut)
+```
+
+The start: the launch screen is the still s on the splash's background (`LaunchMark`, `LaunchBackground` in
+Assets.xcassets; project.yml's `UILaunchScreen`), then `StartSplash` plays S1 Sort In (dark) or S2 Sieve Drop (light) on
+the same grid in the same place, holds until the app knows whether it's paired (1.2 s at least, 4 s at most) and fades.
+
 Gone with the look before: `ColourTheme` (the colour themes; the tint is ink), `ClassColor` (dots; use `Highlighter`),
 `ClassDot` (use `Swatch`), `LectureCard` (use `NoteRow`), `Card` (use `Panel`), `Color.paper` / `.card` (use
 `.surface` / `.surfaceSunken`), `Font.display` / `.titleSerif` / `.headlineSerif` (use `AppText`). Call sites were

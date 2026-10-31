@@ -131,7 +131,7 @@ struct LectureView: View {
             studying = false
             picking = false
         }
-        .refreshable { await load() }
+        .syftRefreshable { await load() }
         .task {
             guard let api = app.api else { return }
             if lecture == nil {
@@ -442,9 +442,9 @@ struct LectureView: View {
     @ViewBuilder private func unwritten(_ l: Lecture) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             if Self.writing(l) {
-                Doodle("writing", height: 88, busy: true)
+                SyftLoader(.pathTrace, height: 88)
             } else if l.status == "failed" {
-                Doodle("cracked", height: 88)
+                SyftMark(height: 88, oddOneOut: true)
             }
             Text(unwrittenWords(l))
                 .textStyle(.summary)

@@ -105,7 +105,7 @@ private struct LibraryHome: View {
         }
         .overlay(alignment: .bottom) { toastView }
         .animation(.smooth, value: toast)
-        .refreshable { await loadAll() }
+        .syftRefreshable { await loadAll() }
         .task { await loadAll() }
         // While the laptop records, its banner appears (and goes) within one read of the library's copy.
         .task {

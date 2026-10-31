@@ -764,7 +764,7 @@ private struct SyftRefresh: ViewModifier {
             }
             .overlay(alignment: .top) {
                 if refreshing || pull > 6 {
-                    SyftLoader(.rowShuffle, height: 34, progress: refreshing ? nil : min(1, pull / 90))
+                    SyftLoader(.rowShuffle, height: 44, progress: refreshing ? nil : min(1, pull / 90))
                         .padding(.top, 10)
                         .allowsHitTesting(false)
                         .transition(.opacity)
@@ -806,6 +806,8 @@ struct SyftGallery: View {
                 SyftLoader(.pixelProgress, height: 12, progress: progress)
                 Slider(value: $progress)
             }
+            EmptyState(title: "Couldn't make flashcards", detail: "The AI's answer wasn't flashcards. Try again.",
+                       actionTitle: "Try again", action: { }, mark: .oddOneOut)
             Button("Play again") { round += 1 }.buttonStyle(.pill(small: true))
         }
     }

@@ -71,7 +71,7 @@ struct ClassView: View {
         .toast($message)
         .sheet(isPresented: $asking) { AskSheet(scope: .class(name)) }
         .fullScreenCover(item: $openNotebook) { NotebookEditor(id: $0.id) }
-        .refreshable { await load() }
+        .syftRefreshable { await load() }
         .task {
             guard let api = app.api else { return }
             if lectures == nil {

@@ -772,49 +772,22 @@ struct EmptyText: View {
     }
 }
 
-/// One of the egghead's doodles (Eli's drawing, and the ones drawn from it: Assets.xcassets/Doodles, written by
-/// tools/egghead/make_art.py), `height` points tall: "sleepy", "cracked", "thinking", "writing", "listening"… `busy`
-/// brings him to life while something's happening: a slow bob and rock, still when Reduce Motion is on.
-struct Doodle: View {
-    var name: String
-    var height: CGFloat = 96
-    var busy = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var up = false
+/// What an empty state shows over its words: the pixel s, or Odd One Out (its top right cell popped out: something's
+/// missing or went wrong).
+enum EmptyMark { case mark, oddOneOut }
 
-    init(_ name: String, height: CGFloat = 96, busy: Bool = false) {
-        self.name = name
-        self.height = height
-        self.busy = busy
-    }
-
-    var body: some View {
-        let moving = busy && !reduceMotion
-        Image("doodle-\(name)")
-            .resizable()
-            .scaledToFit()
-            .frame(height: height)
-            .rotationEffect(.degrees(moving && up ? -2 : 0), anchor: .bottom)
-            .offset(y: moving && up ? -height * 0.04 : 0)
-            .animation(moving ? .easeInOut(duration: 1.2).repeatForever(autoreverses: true) : .default, value: up)
-            .onAppear { up = moving }
-            .onChange(of: moving) { _, now in up = now }
-            .accessibilityHidden(true)
-    }
-}
-
-/// A screen with nothing to show, or that couldn't load: the egghead (when it has a `doodle`), a heading, a sentence,
-/// and what to do about it. Replaces ContentUnavailableView.
+/// A screen with nothing to show, or that couldn't load: the pixel s (when it has a `mark`), a heading, a sentence, and
+/// what to do about it. Replaces ContentUnavailableView.
 struct EmptyState: View {
     var title: String
     var detail: String?
     var actionTitle: String?
     var action: (() -> Void)?
-    var doodle: String?
+    var mark: EmptyMark?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if let doodle { Doodle(doodle, height: 104).padding(.bottom, 8) }
+            if let mark { SyftMark(height: 96, oddOneOut: mark == .oddOneOut).padding(.bottom, 8) }
             Text(title).textStyle(.h2).foregroundStyle(.ink)
             if let detail, !detail.isEmpty { EmptyText(detail) }
             if let actionTitle, let action {
@@ -837,7 +810,7 @@ struct Loaded<T: Codable & Sendable, Content: View>: View {
             content(value)
         } else if let error = resource.error {
             EmptyState(title: error.unreachable ? "Can't reach your library" : failure, detail: error.detail, actionTitle: "Try again",
-                       action: { Task { await resource.load() } }, doodle: error.unreachable ? "sleepy" : "cracked")
+                       action: { Task { await resource.load() } }, mark: .oddOneOut)
         } else {
             StudyLoader(.page, color: .inkSubtle).frame(maxWidth: .infinity, minHeight: 200)
         }
