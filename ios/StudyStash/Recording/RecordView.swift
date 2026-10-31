@@ -253,9 +253,10 @@ struct RecordView: View {
 // MARK: - The recording's bar
 
 /// The desktop's recording bar (`.recbar`, role status): a red outline on the page's white, the panel's corners; the
-/// dot breathing while it records, "Recording" (or "Paused", the dot still), the level, the time, then Pause (Resume)
-/// and Stop, the ink button. After Stop, "Saving…". Where a phone is too narrow for all of it, Pause shows its icon
-/// alone.
+/// s tracing itself, the red cell breathing while it records, "Recording" (or "Paused", the cell still), the level in
+/// five columns of cells the size of the s's, the time, then Pause (Resume) and Stop, the ink button. After Stop,
+/// "Saving…". Where a phone is too narrow for all of it, Pause shows its icon alone, then the level takes three columns,
+/// then Stop shows its square alone (rather than "Stop" cut off at the bar's edge).
 private struct RecordingBar: View {
     var recorder: Recorder
     var stop: () -> Void
@@ -265,8 +266,10 @@ private struct RecordingBar: View {
         let word = phase == .finishing ? "Saving…" : phase == .paused ? "Paused" : "Recording"
         let time = Format.clock(recorder.elapsed)
         ViewThatFits(in: .horizontal) {
-            row(word: word, time: time, pauseWords: true)
-            row(word: word, time: time, pauseWords: false)
+            row(word: word, time: time, pauseWords: true, columns: 5)
+            row(word: word, time: time, pauseWords: false, columns: 5)
+            row(word: word, time: time, pauseWords: false, columns: 3)
+            row(word: word, time: time, pauseWords: false, columns: 3, stopWords: false)
         }
         .padding(.vertical, 8)
         .padding(.leading, 16)
@@ -278,15 +281,20 @@ private struct RecordingBar: View {
         .accessibilityAddTraits(.updatesFrequently)
     }
 
-    private func row(word: String, time: String, pauseWords: Bool) -> some View {
+    /// Path Trace's height here, and the level's (four cells), so its cells are the s's size: the trace fits 62.6 of
+    /// the grid's units in its height.
+    private static let trace: CGFloat = 30
+    private static let level = trace * LevelCells.span(LevelCells.rows) / 62.6
+
+    private func row(word: String, time: String, pauseWords: Bool, columns: Int, stopWords: Bool = true) -> some View {
         let phase = recorder.phase
         let paused = phase == .paused
         let finishing = phase == .finishing
         return HStack(spacing: 12) {
-            Doodle("listening", height: 30, busy: phase == .recording)
+            SyftLoader(.pathTrace, height: Self.trace, running: phase == .recording)
             PulseDot(pulsing: phase == .recording)
             Text(word).font(.atkinson(15, .bold, relativeTo: .body)).foregroundStyle(.ink).fixedSize()
-            if phase == .recording { LevelBars(levels: recorder.levels) }
+            if phase == .recording { LevelCells(levels: recorder.levels, columns: columns, height: Self.level) }
             Text(time).font(.atkinson(15, .medium, relativeTo: .body)).foregroundStyle(.inkMuted).fixedSize()
             Spacer(minLength: 4)
             Button {
@@ -308,7 +316,7 @@ private struct RecordingBar: View {
                     } else {
                         RoundedRectangle(cornerRadius: 2).fill(.surface).frame(width: 10, height: 10)
                     }
-                    Text("Stop")
+                    if stopWords { Text("Stop") }
                 }
             }
             .buttonStyle(.pill(small: true, ink: true))
@@ -319,15 +327,15 @@ private struct RecordingBar: View {
     }
 }
 
-/// The recording's dot: red, breathing while it records (not while paused, nor for someone who asked for less
-/// motion), as the desktop's 1.6-second pulse.
+/// The recording's dot: one red cell of the pixel s (SyftCellShape), breathing while it records (not while paused, nor
+/// for someone who asked for less motion), as the desktop's 1.6-second pulse.
 struct PulseDot: View {
     var pulsing: Bool
     var size: CGFloat = 12
     @Environment(\.accessibilityReduceMotion) private var still
 
     var body: some View {
-        let dot = Circle().fill(.record).frame(width: size, height: size).accessibilityHidden(true)
+        let dot = SyftCellShape().fill(.record).frame(width: size, height: size).accessibilityHidden(true)
         if pulsing && !still {
             dot.phaseAnimator([1.0, 0.35]) { view, opacity in view.opacity(opacity) } animation: { _ in .easeInOut(duration: 0.8) }
         } else {
@@ -594,7 +602,7 @@ struct RecordAccessory: View {
                         Spacer(minLength: 4)
                     }
                     if recorder.phase == .recording {
-                        LevelBars(levels: recorder.levels)
+                        LevelCells(levels: recorder.levels)
                     } else if recorder.phase == .paused, !inline {
                         Text("Paused").textStyle(.buttonSmall).foregroundStyle(.inkMuted)
                     }

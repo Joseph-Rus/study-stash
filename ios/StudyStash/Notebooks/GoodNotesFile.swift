@@ -80,7 +80,7 @@ struct GoodNotesNotebook {
             let strokes = ((try? zip.read("notes/\(journal)")).map(Proto.delimited) ?? []).compactMap(Self.stroke)
             return Page(size: paper?.size ?? Self.standardPaper, background: background, strokes: strokes)
         }
-        if pages.isEmpty { throw GoodNotesError("That notebook has no pages Egghead Notes can read.") }
+        if pages.isEmpty { throw GoodNotesError("That notebook has no pages Syft Notes can read.") }
     }
 
     /// A page record's id names its journal with the last byte one more ("…521" → "…522").

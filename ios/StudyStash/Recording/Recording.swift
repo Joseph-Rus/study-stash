@@ -155,7 +155,7 @@ final class RecordingStore {
         } catch let e as APIError where e.status == 404 {
             // A library from before phones could send lectures: kept, and sent once it's updated.
             r.state = .waiting
-            r.error = "Update Egghead Notes on your computer to send recordings from this phone. It's sent then, on its own."
+            r.error = "Update Syft Notes on your computer to send recordings from this phone. It's sent then, on its own."
         } catch let e as APIError {
             r.state = e.unreachable ? .waiting : .failed
             r.error = e.unreachable ? nil : e.detail

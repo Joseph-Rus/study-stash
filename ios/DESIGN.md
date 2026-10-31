@@ -13,7 +13,7 @@ don't make colours, fonts or icons of your own.
   wrote, `.inkSubtle` for counts, times and placeholders. **No accent colour**: the tint is ink, a filled button is
   ink with the page's colour on it (`.pill(ink: true)`), a link is muted text over a 2-point grey underline
   (`.textLink`).
-- **Red means recording or late, nothing else.** `.record` is only the record dot, the level bars and a recording's
+- **Red means recording or late, nothing else.** `.record` is only the record dot, the level's cells and a recording's
   outline; `.late` is only "Missing" and "Was due…". No red weekdays, no orange or green buttons, no red mic on
   something that isn't recording.
 - **A class has one highlighter**, shown only as a `Swatch` (lists of classes, pickers), a `Highlight` behind its name
@@ -29,15 +29,23 @@ don't make colours, fonts or icons of your own.
   across or down a view, no glowing halos. Flat token colours only. (The only soft edge is a floating thing's
   shadow, `.lifted(...)`.)
 - **The real logo, never a stand-in.** Wherever the app shows its logo (setup, pairing, About), it's
-  `StudyStashLogo(size:)`: the app icon itself (Eli's egghead on a paper tile, on black in dark), with
+  `StudyStashLogo(size:)`: the app icon itself (the pixel s: on a white tile, on ink in dark), with
   the app icon's corners. Never an SF Symbol, a Lucide icon, or a letter or shape drawn to look like it.
 - **No prominent system buttons.** `.borderedProminent` and `.glassProminent` fill with the tint (ink) and write in
   white, which disappears on dark's light ink: use `.pill(ink: true)` (ink filled, the page's colour on it). Likewise
   never `.white` text on `.tint` or `.accentColor`.
 - **Words** are the desktop's (`Format`, `Nouns`): "Today", "Yesterday", "Wed 7 Oct", "7 Oct 2025"; "9:30 AM";
   "13 min", "1 h 12 min"; lecture / meeting / recording / notes. Plain, second person, no exclamation marks, no emoji.
-- **Motion**: pressing changes colour only; only the recording dot, the level, a caret, the loader and Ask's thinking
-  marks loop. Respect Reduce Motion.
+- **Motion**: pressing changes colour only; only the recording dot, the level, a caret and the loader loop. Respect
+  Reduce Motion.
+- **The pixel s's cells, never circles, for what records**: the record dot (`RecordDot`, `PulseDot`, `LiveDot`) is one
+  cell of the mark (`SyftCellShape`: a rounded square, corners 1.8 on its 6.6, about 27 %), in `.record`; paused, a
+  ring of one. The level is columns of cells (`LevelCells`: 3 in a pill, up to 5 in a bar, four cells each on the
+  mark's pitch 8, lit from the bottom a whole cell at a time over the mesh's fill; only opacity moves).
+- **One mark at a time.** Our mark or loader never stands beside (or over) an AI's own mark. While an answer is on its
+  way, the s's hopping bits are the only thing moving and the AI is named in words ("Claude is reading your notes…");
+  the empty Ask page shows the s alone. The AI's small mark stays as attribution: Ask's header and under a finished
+  answer.
 - **Radius nests**: controls 8 → today's cell 10 → panels, the Ask bar, toasts 12 → the main sheet 14 → pills round.
 - It's still iOS: keep the tab bar, push navigation, sheets, swipe actions and the glass the system draws (tab bar,
   toolbars, menus, alerts, the keyboard). Restyle what's inside them. On an iPad (regular width) lean towards the
@@ -108,9 +116,9 @@ are the desktop's (`engine/src/StudyStash.App/Assets/Brands`, read its README), 
 never recoloured or redrawn, shown only in Ask to say which AI answers (`AskEngine`, from the library's `GET /ai`).
 They're the one place colour other than ink and a class's highlighter appears, and Gemini's own colours are the one
 exception to "no gradients". ChatGPT's and Ollama's have a light and a dark file. Gemini's is a picture WebKit made from
-the unchanged SVG (iOS's own SVG drawing leaves out its soft blends). While an AI thinks, Ask doesn't move its mark: `ThinkingMark` redraws how
-that product itself shows thinking (Claude Code's spinner and the Claude apps' spark, ChatGPT's dot, Gemini's sparkle,
-Ollama's braille spinner) from shapes, in its colours; `docs/thinking-animations.md` says what each is based on.
+the unchanged SVG (iOS's own SVG drawing leaves out its soft blends). They stay still and small, as attribution (Ask's
+header, under a finished answer): while an AI works, Ask shows the s's hopping bits and names the AI in words, never
+its mark or a redrawing of how it shows thinking beside ours.
 
 ## Icons (`Icons.swift`, `Resources/Icons.xcassets`)
 
@@ -153,7 +161,7 @@ It refuses a name the desktop already has, and checks every desktop icon still m
 | `plus` | `add` |
 | `mic`, `mic.fill` | `mic` |
 | `mic.slash` | `mic_off` |
-| `waveform` | `graphic_eq` (or `LevelBars` for a live level) |
+| `waveform` | `graphic_eq` (or `LevelCells` for a live level) |
 | `stop.fill` | `stop` filled |
 | `pause.fill`, `pause.circle.fill` | `pause` filled |
 | `play.fill` | `play_arrow` filled |
@@ -188,7 +196,7 @@ It refuses a name the desktop already has, and checks every desktop icon still m
 | `arrow.clockwise` | `refresh` |
 | `arrow.up.circle`, `tray.and.arrow.up(.fill)` | `upload` |
 | `tray` | `inbox` (Unsorted) |
-| `wand.and.stars` | `drive_file_move` (file events in a class); `inbox` ("Let Egghead Notes sort it") |
+| `wand.and.stars` | `drive_file_move` (file events in a class); `inbox` ("Let Syft Notes sort it") |
 | `icloud.slash` | `cloud_off` |
 | `wifi.slash` | `wifi_off` |
 | `icloud.and.arrow.up` | `cloud_upload` |
@@ -230,14 +238,12 @@ Button { } label: { Label("Search", icon: "search") }.buttonStyle(.icon)       /
 Button { } label: { row }.buttonStyle(.row)           // a whole row, washed while pressed
 RecordButton(state: .idle) { start() }                // .recording / .paused, words:, elapsed:, levels:, stop:
 RecordDot(state: .recording, mini: true)
-LevelBars(levels: recorder.levels)                    // three red bars
+LevelCells(levels: recorder.levels)                   // three columns of the s's cells; columns: 5 in a bar
 AskBar(placeholder: "Ask anything", text: $q, busy: answering, onStop: { stop() }) {
     Menu { … } label: { AskScopeChip(title: "All notes") }               // the scope chip, a native menu
 } onSend: { send() }                                  // one pill; empties itself when sent; Send is Stop while answering
 MarkdownText(answer, style: .lede, caret: writing)    // an AI's Markdown in the look; a caret while it's written
-BrandMark(.claude, size: 18)                          // the answering AI's own mark (Ask only), unchanged
-ThinkingMark(engine: .claude)                         // it thinking, as its own app shows it; still with Reduce Motion
-Text("Reading your notes…").thinkingShimmer(engine)     // its status words shimmering as its own do (docs/thinking-animations.md)
+BrandMark(.claude, size: 18)                          // the answering AI's own mark (Ask's header, a finished answer), unchanged
 StudyLoader(.page)                                    // loading: three drops flowing together and apart; .inline, .screen; color:
 AskBarButton(placeholder: "Ask about this lecture", scope: "This lecture") { asking = true }
 EmptyText("No lectures yet. Record one here, or attach a recording.")
@@ -250,6 +256,28 @@ Toggle("Only my notes", isOn: $only).toggleStyle(.ink)
 TopicChips(topics: l.topics)                          // plain muted words, parted by dots
 Loaded(resource: r) { value in … }                    // loading / failed / loaded, in the look
 ```
+
+The pixel s (`Design/Syft.swift`, Joey's Pixel Sift boards; colours `SyftPalette` in Theme.swift; the same cells and
+keyframes as the phone web app's `web/src/ui/syftCells.ts` and `styles/syft.css`). All of them hold still with Reduce
+Motion; `-show components:5` shows them side by side, `-splash-at 1.5` holds the start splash at that second.
+
+```swift
+SyftMark(height: 96)                                  // the white tile's look in light, the dark tile's (with its mesh) in dark
+SyftMark(height: 96, oddOneOut: true)                 // its top right cell popped out: empty pages, problems
+SyftMark(height: 96, mesh: true)                      // with the light mesh (P6), or the night one in dark (P3)
+SyftMark(height: 30, tile: .circle)                   // beside an answer; .square: on the app icon's tile
+SyftWordmark(size: 40)                                // "syft notes" in Archivo
+SyftLoader(.pathTrace, height: 88)                    // a page waiting (notes being written, a recording: running:)
+SyftLoader(.hoppingBits, height: 18)                  // an answer on its way, inline
+SyftLoader(.pixelProgress, progress: 0.4)             // imports and syncing; without progress it loops
+SyftLoader(.rowShuffle)                               // what .syftRefreshable { await load() } shows when pulled
+SyftHello(height: 120)                                // setup's welcome: S3 Pop Back, once
+EmptyState(title: "…", detail: "…", mark: .oddOneOut) // with the s over it (.mark, .oddOneOut)
+```
+
+The start: the launch screen is the still s on the splash's background (`LaunchMark`, `LaunchBackground` in
+Assets.xcassets; project.yml's `UILaunchScreen`), then `StartSplash` plays S1 Sort In (dark) or S2 Sieve Drop (light) on
+the same grid in the same place, holds until the app knows whether it's paired (1.2 s at least, 4 s at most) and fades.
 
 Gone with the look before: `ColourTheme` (the colour themes; the tint is ink), `ClassColor` (dots; use `Highlighter`),
 `ClassDot` (use `Swatch`), `LectureCard` (use `NoteRow`), `Card` (use `Panel`), `Color.paper` / `.card` (use

@@ -17,7 +17,7 @@ struct DriveStatus: Sendable, Equatable {
 }
 
 /// The phone's side of the phone over Google Drive (docs/phone-google.md). The laptop keeps a copy of its library's
-/// answers in Egghead Notes' hidden Drive folder; this keeps it on the phone and answers reads from it at once (offline
+/// answers in Syft Notes' hidden Drive folder; this keeps it on the phone and answers reads from it at once (offline
 /// too). Anything else is a request in the phone's box: the laptop does it and writes the answer into the answer file
 /// the phone made for it, which the phone reads by id until it's done. Writes are kept on the phone until the laptop
 /// has done them, through restarts; asking for the same write again joins the one waiting.

@@ -161,7 +161,7 @@ struct GoodNotesImportView: View {
             if let first = book.pages.first { cover = Self.picture(first, width: 208) }
         } catch {
             problem = (error as? GoodNotesError)?.words
-                ?? "That isn't a GoodNotes notebook Egghead Notes can read. In GoodNotes, try Share, then Export, then PDF instead, and attach the PDF."
+                ?? "That isn't a GoodNotes notebook Syft Notes can read. In GoodNotes, try Share, then Export, then PDF instead, and attach the PDF."
         }
     }
 

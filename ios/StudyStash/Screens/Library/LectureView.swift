@@ -131,7 +131,7 @@ struct LectureView: View {
             studying = false
             picking = false
         }
-        .refreshable { await load() }
+        .syftRefreshable { await load() }
         .task {
             guard let api = app.api else { return }
             if lecture == nil {
@@ -442,9 +442,9 @@ struct LectureView: View {
     @ViewBuilder private func unwritten(_ l: Lecture) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             if Self.writing(l) {
-                Doodle("writing", height: 88, busy: true)
+                SyftLoader(.pathTrace, height: 88)
             } else if l.status == "failed" {
-                Doodle("cracked", height: 88)
+                SyftMark(height: 88, oddOneOut: true)
             }
             Text(unwrittenWords(l))
                 .textStyle(.summary)
@@ -1108,16 +1108,17 @@ private struct StudyButtonStyle: ButtonStyle {
     }
 }
 
-/// The red dot of a recording, breathing while it records (still when paused, and for less motion).
+/// The red dot of a recording, one cell of the pixel s (SyftCellShape), breathing while it records (a still ring when
+/// paused; still for less motion).
 private struct BreathingDot: View {
     var paused: Bool
     @Environment(\.accessibilityReduceMotion) private var still
     @State private var dim = false
 
     var body: some View {
-        Circle()
+        SyftCellShape()
             .fill(paused ? Color.clear : .record)
-            .overlay { if paused { Circle().strokeBorder(.record, lineWidth: 2) } }
+            .overlay { if paused { SyftCellShape().strokeBorder(.record, lineWidth: 2) } }
             .frame(width: 10, height: 10)
             .opacity(dim && !paused && !still ? 0.35 : 1)
             .animation(paused || still ? nil : .easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: dim)

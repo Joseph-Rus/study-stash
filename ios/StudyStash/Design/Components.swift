@@ -8,7 +8,7 @@ import SwiftUI
 
 // MARK: - The logo
 
-/// Egghead Notes' own logo, the app icon (Eli's egghead, glasses and bow tie, on a paper tile), with the app
+/// Syft Notes' own logo, the app icon (the pixel s on its white tile, or the dark tile in dark mode), with the app
 /// icon's rounded corners: wherever the app shows its logo (setup, pairing, About). Never a stand-in drawn some other
 /// way. `size` is its width and height in points.
 struct StudyStashLogo: View {
@@ -20,7 +20,7 @@ struct StudyStashLogo: View {
             .frame(width: size, height: size)
             .clipShape(.rect(cornerRadius: size * 0.2237, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: size * 0.2237, style: .continuous).strokeBorder(.line))
-            .accessibilityLabel("Egghead Notes")
+            .accessibilityLabel("Syft Notes")
     }
 }
 
@@ -481,22 +481,24 @@ extension ButtonStyle where Self == RowButtonStyle {
 /// What Record shows: ready, recording, or paused.
 enum RecordState: Sendable { case idle, recording, paused }
 
-/// Record's dot: red with a white dot in it; recording, the centre is a stop square; paused, a red ring round a red
-/// centre. 40 across (`mini`, 32: the floating recorder's and the tab bar's).
+/// Record's dot, one cell of the pixel s (SyftCellShape), never a circle: red with a white cell in it; recording, the
+/// centre is a stop square (sharper corners); paused, a red ring round a red centre. 36 across, so its corners stay
+/// inside Record's 48-point pill with 6 all round (a circle's 40 would poke out of the pill's round end); `mini`, 32:
+/// the floating recorder's and the tab bar's.
 struct RecordDot: View {
     var state: RecordState = .idle
     var mini = false
 
     var body: some View {
-        let size: CGFloat = mini ? 32 : 40
-        let inner: CGFloat = state == .recording ? (mini ? 10 : 12) : (mini ? 11 : 14)
+        let size: CGFloat = mini ? 32 : 36
+        let inner: CGFloat = state == .recording ? (mini ? 10 : 11) : (mini ? 11 : 13)
         ZStack {
             if state == .paused {
-                Circle().strokeBorder(.record, lineWidth: 2)
+                SyftCellShape().strokeBorder(.record, lineWidth: 2)
             } else {
-                Circle().fill(.record)
+                SyftCellShape().fill(.record)
             }
-            RoundedRectangle(cornerRadius: state == .recording ? 2 : inner / 2)
+            RoundedRectangle(cornerRadius: state == .recording ? 2 : inner * SyftCellShape.corner)
                 .fill(state == .paused ? Color.record : .onRecord)
                 .frame(width: inner, height: inner)
         }
@@ -506,7 +508,7 @@ struct RecordDot: View {
 }
 
 /// Record: a white pill with red only in its dot, 48 tall. Recording, it's ringed in red and says the folder, the
-/// level (three red bars) and the time. `action` is the pill; `stop` (while recording) is the dot alone.
+/// level (three columns of cells) and the time. `action` is the pill; `stop` (while recording) is the dot alone.
 struct RecordButton: View {
     var state: RecordState = .idle
     /// "Record", or while recording the folder's name.
@@ -527,12 +529,12 @@ struct RecordButton: View {
                     RecordDot(state: state)
                 }
                 Text(words).textStyle(.button).foregroundStyle(.ink).lineLimit(1)
-                if state == .recording, !levels.isEmpty { LevelBars(levels: levels).frame(height: 16) }
+                if state == .recording, !levels.isEmpty { LevelCells(levels: levels) }
                 if state != .idle, let elapsed {
                     Text(elapsed).textStyle(.button).fontWeight(.medium).foregroundStyle(.inkMuted).fixedSize()
                 }
             }
-            .padding(.leading, 4)
+            .padding(.leading, 6)
             .padding(.trailing, 18)
             .frame(height: 48)
             .background(.surface, in: .capsule)
@@ -552,22 +554,46 @@ private struct PressWash: ButtonStyle {
     }
 }
 
-/// The live level, as the desktop's: a few red bars that rise and fall (`bars`, 3 by default), the last few levels.
-struct LevelBars: View {
+/// The live level in the pixel s's cells: `columns` columns (3 in a pill, up to 5 in a bar), the last few levels, of
+/// four cells each on the mark's grid (cell 6.6, corners 1.8, pitch 8, scaled so four cells are `height` tall), lit
+/// from the bottom a whole cell at a time in the recording red over the mesh's quiet fill. Only a cell's opacity
+/// changes, quickly (80 ms). Reduce Motion: steady, two of the four lit.
+struct LevelCells: View {
     var levels: [Float]
-    var bars = 3
+    var columns = 3
+    var height: CGFloat = 16
     @Environment(\.accessibilityReduceMotion) private var still
 
+    nonisolated static let rows = 4
+
+    /// The grid's units across `n` cells: n − 1 pitches and a cell.
+    nonisolated static func span(_ n: Int) -> CGFloat { CGFloat(n - 1) * SyftCells.pitch + SyftCells.cell }
+
+    /// How many of a column's four cells a level (0…1) lights: whole cells, rounded up, the bottom one always (it is
+    /// recording).
+    nonisolated static func lit(_ level: Float) -> Int { max(1, min(rows, Int((Double(level) * Double(rows)).rounded(.up)))) }
+
     var body: some View {
-        let shown = Array(levels.suffix(bars))
-        HStack(alignment: .center, spacing: 2) {
-            ForEach(0..<bars, id: \.self) { i in
-                let level = i < shown.count ? CGFloat(shown[i]) : 0
-                Capsule().fill(.record).frame(width: 3)
-                    .frame(height: max(5, (still ? 0.5 : level) * 16))
+        let unit = height / Self.span(Self.rows)
+        let cell = SyftCells.cell * unit, gap = (SyftCells.pitch - SyftCells.cell) * unit
+        let shown = Array(levels.suffix(columns))
+        let missing = columns - shown.count
+        HStack(alignment: .bottom, spacing: gap) {
+            ForEach(0..<columns, id: \.self) { c in
+                let lit = still ? 2 : Self.lit(c < missing ? 0 : shown[c - missing])
+                VStack(spacing: gap) {
+                    ForEach(0..<Self.rows, id: \.self) { row in
+                        ZStack {
+                            SyftCellShape().fill(Color(syft: SyftPalette.mesh))
+                            SyftCellShape().fill(.record).opacity(Self.rows - row <= lit ? 1 : 0)
+                        }
+                        .frame(width: cell, height: cell)
+                    }
+                }
+                .animation(still ? nil : .linear(duration: 0.08), value: lit)
             }
         }
-        .frame(height: 16)
+        .frame(width: Self.span(columns) * unit, height: height)
         .accessibilityHidden(true)
     }
 }
@@ -772,49 +798,22 @@ struct EmptyText: View {
     }
 }
 
-/// One of the egghead's doodles (Eli's drawing, and the ones drawn from it: Assets.xcassets/Doodles, written by
-/// tools/egghead/make_art.py), `height` points tall: "sleepy", "cracked", "thinking", "writing", "listening"… `busy`
-/// brings him to life while something's happening: a slow bob and rock, still when Reduce Motion is on.
-struct Doodle: View {
-    var name: String
-    var height: CGFloat = 96
-    var busy = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var up = false
+/// What an empty state shows over its words: the pixel s, or Odd One Out (its top right cell popped out: something's
+/// missing or went wrong).
+enum EmptyMark { case mark, oddOneOut }
 
-    init(_ name: String, height: CGFloat = 96, busy: Bool = false) {
-        self.name = name
-        self.height = height
-        self.busy = busy
-    }
-
-    var body: some View {
-        let moving = busy && !reduceMotion
-        Image("doodle-\(name)")
-            .resizable()
-            .scaledToFit()
-            .frame(height: height)
-            .rotationEffect(.degrees(moving && up ? -2 : 0), anchor: .bottom)
-            .offset(y: moving && up ? -height * 0.04 : 0)
-            .animation(moving ? .easeInOut(duration: 1.2).repeatForever(autoreverses: true) : .default, value: up)
-            .onAppear { up = moving }
-            .onChange(of: moving) { _, now in up = now }
-            .accessibilityHidden(true)
-    }
-}
-
-/// A screen with nothing to show, or that couldn't load: the egghead (when it has a `doodle`), a heading, a sentence,
-/// and what to do about it. Replaces ContentUnavailableView.
+/// A screen with nothing to show, or that couldn't load: the pixel s (when it has a `mark`), a heading, a sentence, and
+/// what to do about it. Replaces ContentUnavailableView.
 struct EmptyState: View {
     var title: String
     var detail: String?
     var actionTitle: String?
     var action: (() -> Void)?
-    var doodle: String?
+    var mark: EmptyMark?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if let doodle { Doodle(doodle, height: 104).padding(.bottom, 8) }
+            if let mark { SyftMark(height: 96, oddOneOut: mark == .oddOneOut).padding(.bottom, 8) }
             Text(title).textStyle(.h2).foregroundStyle(.ink)
             if let detail, !detail.isEmpty { EmptyText(detail) }
             if let actionTitle, let action {
@@ -837,7 +836,7 @@ struct Loaded<T: Codable & Sendable, Content: View>: View {
             content(value)
         } else if let error = resource.error {
             EmptyState(title: error.unreachable ? "Can't reach your library" : failure, detail: error.detail, actionTitle: "Try again",
-                       action: { Task { await resource.load() } }, doodle: error.unreachable ? "sleepy" : "cracked")
+                       action: { Task { await resource.load() } }, mark: .oddOneOut)
         } else {
             StudyLoader(.page, color: .inkSubtle).frame(maxWidth: .infinity, minHeight: 200)
         }
@@ -845,7 +844,7 @@ struct Loaded<T: Codable & Sendable, Content: View>: View {
 }
 
 /// A short message floating at the foot of the screen, as the desktop's: "Moved to Calculus II. Undo", or a title
-/// with a sentence under it ("Recording saved" / "Egghead Notes is writing it down…"). Words in ink, the sentence muted,
+/// with a sentence under it ("Recording saved" / "Syft Notes is writing it down…"). Words in ink, the sentence muted,
 /// an optional link at the end, on a white panel lifted on its shadow.
 struct Toast: View {
     var text: String

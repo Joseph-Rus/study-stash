@@ -6,7 +6,7 @@ import Testing
 // Only what could really break for a student: reads come from the copy without asking, a recording isn't lost or sent
 // twice, Ask streams, and a laptop that's away says so.
 
-/// Egghead Notes' hidden folder, in memory.
+/// Syft Notes' hidden folder, in memory.
 actor FakeDrive: DriveFiles {
     struct File {
         var name: String

@@ -26,7 +26,7 @@ struct BoardCamera: View {
             case .starting, .ready:
                 CameraPreview(camera: camera).ignoresSafeArea()
             case .denied:
-                message("Egghead Notes can't use the camera.", "Allow it in Settings to take photos of the board.", settings: true)
+                message("Syft Notes can't use the camera.", "Allow it in Settings to take photos of the board.", settings: true)
             case .unavailable:
                 message("The camera isn't available here.", "You can still add photos from your Photos.", settings: false)
             }

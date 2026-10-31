@@ -68,7 +68,7 @@ import Testing
     }
 
     @Test func aRefusedCodeOpensTheCodePageWithTheLibrarysWords() async {
-        let words = "That code isn't right, or it's more than ten minutes old. Make a new one in Egghead Notes' Settings."
+        let words = "That code isn't right, or it's more than ten minutes old. Make a new one in Syft Notes' Settings."
         let (page, joined) = await ScanPairing.next(base: base, library: library, code: "042917") { _ in
             throw APIError(status: 401, detail: words)
         }
@@ -308,6 +308,13 @@ import Testing
         let id = Recording.newID(Format.parse("2026-10-15T09:15:00")!)
         #expect(id.wholeMatch(of: /phone-20261015-091500-[0-9a-f]{6}/) != nil)
         #expect(Recording.newID() != Recording.newID())
+    }
+
+    @Test func theLevelLightsWholeCellsFromTheBottom() {
+        // Silence still shows it's recording (the bottom cell); a loud moment all four; never more, never half a cell.
+        #expect([0, 0.2, 0.26, 0.5, 0.74, 0.9, 1, 1.5].map { LevelCells.lit($0) } == [1, 1, 2, 2, 3, 4, 4, 4])
+        // Four cells on the mark's pitch: three gaps and a cell, as the s's grid has them.
+        #expect(abs(LevelCells.span(4) - 30.6) < 0.001)
     }
 
     @Test func transcriptLinesAsTheLibraryReadsThem() {

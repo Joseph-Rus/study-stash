@@ -158,6 +158,7 @@ struct ComponentGallery: View {
                 case 2: second
                 case 3: third
                 case 4: icons
+                case 5: SyftGallery()
                 default: first
                 }
             }
@@ -266,15 +267,15 @@ struct ComponentGallery: View {
                 VStack(spacing: 0) {
                     row("Demo library", "Connected")
                     Rule()
-                    row("Egghead Notes", "0.17.0")
+                    row("Syft Notes", "0.17.0")
                 }
             }
             EmptyText("No lectures yet. Record one here, or attach a recording.")
-            EmptyState(title: "Can't reach your library", detail: "Turn Tailscale on here and on your computer, and keep Egghead Notes open.", actionTitle: "Try again") { }
+            EmptyState(title: "Can't reach your library", detail: "Turn Tailscale on here and on your computer, and keep Syft Notes open.", actionTitle: "Try again") { }
             AskBar(placeholder: "Ask anything about your notes", text: $text, scope: "All notes") { }
             AskBarButton(placeholder: "Ask about this lecture", scope: "This lecture") { }
             Toast("Moved to Calculus II.", actionTitle: "Undo") { }
-            Toast("Recording saved", detail: "Egghead Notes is writing it down; the library files it and writes your notes.")
+            Toast("Recording saved", detail: "Syft Notes is writing it down; the library files it and writes your notes.")
             OfflineNote()
             TopicChips(topics: ["Integration by parts", "LIATE", "Tabular method"])
             VStack(alignment: .leading, spacing: 4) {

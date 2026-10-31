@@ -184,7 +184,7 @@ struct StudyView: View {
         } else {
             ScrollView {
                 EmptyState(title: "Couldn't make flashcards", detail: problem, actionTitle: "Try again",
-                           action: { Task { await make() } }, doodle: "cracked")
+                           action: { Task { await make() } }, mark: .oddOneOut)
                     .padding(.horizontal, Space.pageCompact)
                     .frame(maxWidth: 640)
                     .frame(maxWidth: .infinity)
@@ -195,7 +195,7 @@ struct StudyView: View {
     /// While the AI writes them: what's happening, in a sentence.
     private func makingNote(over: Bool) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Doodle("writing", height: 88, busy: true)
+            SyftLoader(.pathTrace, height: 88)
             HStack(spacing: 10) {
                 StudyLoader(.page, color: .inkSubtle)
                 Text(over ? "Making new ones…" : "Making flashcards and a quiz from your notes…")
@@ -203,7 +203,7 @@ struct StudyView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             EmptyText(over ? "The ones you have stay until the new ones are ready."
-                      : "Egghead Notes reads the notes the way Ask does and writes questions from them. It takes a moment.")
+                      : "Syft Notes reads the notes the way Ask does and writes questions from them. It takes a moment.")
         }
         .padding(.horizontal, Space.pageCompact)
         .padding(.vertical, 24)

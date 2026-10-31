@@ -11,6 +11,8 @@ struct StudyStashApp: App {
     init() {
         UNUserNotificationCenter.current().delegate = NotificationRouter.shared
         SystemLook.apply()
+        // Pull to refresh shows the pixel s's Row Shuffle (syftRefreshable), not the system's spinner.
+        UIRefreshControl.appearance().tintColor = .clear
         // Pause and Stop on the lock screen: wired as the app starts, not when its first screen appears, so a tap that
         // wakes the app in the background still reaches the recorder.
         RecordingControl.stop = { await Recorder.shared.stop(api: AppModel.current?.api) }
@@ -25,6 +27,8 @@ struct StudyStashApp: App {
     var body: some Scene {
         WindowGroup {
             RootView()
+                // The pixel s sorting itself in, over the first screen until it's ready.
+                .overlay { StartSplash() }
                 .environment(app)
                 // The desktop's look: no accent (the tint is ink), one typeface, the page's white behind.
                 .tint(.ink)

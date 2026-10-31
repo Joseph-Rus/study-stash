@@ -14,10 +14,10 @@ import VisionKit
 // laptop, only while the laptop isn't in the Google Drive folder yet] → [What it's for, only if the library hasn't
 // been told] → You're in: what to do next → Home.
 //
-// Other ways: over Tailscale, Open Egghead Notes on your computer (scan its code with this app, or type the address) →
+// Other ways: over Tailscale, Open Syft Notes on your computer (scan its code with this app, or type the address) →
 // [This phone can't reach your computer yet, only if it can't] → Found {library}: the 6 digits → [What it's for] →
 // You're in. Or Try it with sample classes → Home, with the demo library. A QR code that carries the 6 digits too
-// (`#code=042917`, from a computer on a newer Egghead Notes) skips typing them: the phone pairs as soon as it finds the
+// (`#code=042917`, from a computer on a newer Syft Notes) skips typing them: the phone pairs as soon as it finds the
 // library, and only shows the code page if that code is refused (used, too old), with the library's words, to type a
 // fresh one.
 
@@ -148,8 +148,8 @@ struct PairView: View {
     /// 1. Welcome: Google first (the same account as on the laptop), the laptop's code second, the rest under Other
     /// ways.
     private var welcome: some View {
-        SetupScreen(title: "Egghead Notes",
-                    lede: "Your lectures, written up and filed. This app reads them from Egghead Notes on your laptop, and records new ones.",
+        SetupScreen(title: "Syft Notes",
+                    lede: "Your lectures, written up and filed. This app reads them from Syft Notes on your laptop, and records new ones.",
                     logo: true) {
             if let words = problem ?? app.googleProblem { ProblemText(words) }
         } foot: {
@@ -190,7 +190,7 @@ struct PairView: View {
                     path.append(.connect)
                 }
                 NextRow(icon: "book_2", title: "Try it with sample classes",
-                        about: "Made-up classes and lectures, to see what Egghead Notes does.") {
+                        about: "Made-up classes and lectures, to see what Syft Notes does.") {
                     withAnimation(.smooth) {
                         app.tryDemo()
                         app.go(to: .home)
@@ -198,7 +198,7 @@ struct PairView: View {
                 }
             }
         } foot: {
-            Text("No laptop with Egghead Notes yet? Get it at \(SetupLinks.siteName)")
+            Text("No laptop with Syft Notes yet? Get it at \(SetupLinks.siteName)")
                 .textStyle(.meta)
                 .foregroundStyle(.inkMuted)
                 .multilineTextAlignment(.center)
@@ -211,7 +211,7 @@ struct PairView: View {
         let email = app.drive?.email ?? (SetupDebug.page == "laptop" ? "sam.rivera@example.com" : "")
         let other = hinted.flatMap { h in h.isEmpty || h.lowercased() == email.lowercased() ? nil : h }
         return SetupScreen(title: "Now connect your laptop",
-                           lede: "On your laptop, open Egghead Notes, then Settings, then Phone, and choose Connect with Google. Use the same account as here.") {
+                           lede: "On your laptop, open Syft Notes, then Settings, then Phone, and choose Connect with Google. Use the same account as here.") {
             VStack(alignment: .leading, spacing: 20) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Google account on this phone").textStyle(.meta).foregroundStyle(.inkSubtle)
@@ -247,7 +247,7 @@ struct PairView: View {
 
     /// 2. On your computer.
     private var connect: some View {
-        SetupScreen(step: "Step 1 of 2", title: "Open Egghead Notes on your computer") {
+        SetupScreen(step: "Step 1 of 2", title: "Open Syft Notes on your computer") {
             VStack(alignment: .leading, spacing: 20) {
                 NumberedSteps {
                     StepRow(1) { Text("Open Settings, then Phone.") }
@@ -344,7 +344,7 @@ struct PairView: View {
         }
     }
 
-    static let cameraWords = "Egghead Notes isn't allowed to use the camera. Turn it on in Settings, or type the address instead."
+    static let cameraWords = "Syft Notes isn't allowed to use the camera. Turn it on in Settings, or type the address instead."
 
     /// The camera, asked for here the first time (the system's question, with the reason from Info.plist); refused,
     /// the button turns into the way to Settings.
@@ -438,7 +438,7 @@ struct PairView: View {
     private func find(_ text: String) async {
         let candidates = LibraryAddress.candidates(from: text)
         guard !candidates.isEmpty else {
-            problem = "That isn't an Egghead Notes address. Scan the QR code on your computer, or check the address."
+            problem = "That isn't a Syft Notes address. Scan the QR code on your computer, or check the address."
             return
         }
         tried = text
@@ -527,9 +527,9 @@ enum GoogleLink {
     }
 }
 
-/// Where a student gets Egghead Notes for their computer, and Tailscale for the phone.
+/// Where a student gets Syft Notes for their computer, and Tailscale for the phone.
 enum SetupLinks {
-    static let siteName = "study-stash-app.web.app"
+    static let siteName = "syftnotes.com"
     static let tailscale = URL(string: "https://apps.apple.com/app/tailscale/id1470499037")!
 }
 
@@ -608,7 +608,7 @@ private struct CodeEntry: View {
 
     private enum Field { case code, name }
     /// What the library says to a wrong code (LibraryWeb.Devices.cs), for the pictures.
-    static let wrongCode = "That code isn't right, or it's more than ten minutes old. Make a new one in Egghead Notes' Settings."
+    static let wrongCode = "That code isn't right, or it's more than ten minutes old. Make a new one in Syft Notes' Settings."
 
     var body: some View {
         SetupScreen(step: "Step 2 of 2", title: "Found \(library.name)",
@@ -773,7 +773,7 @@ private struct UsesStep: View {
     @State private var problem: String?
 
     var body: some View {
-        SetupScreen(title: "What will you use Egghead Notes for?",
+        SetupScreen(title: "What will you use Syft Notes for?",
                     lede: "Pick any that fit. School brings in classes, Canvas and what's due; anything else gets folders.") {
             VStack(alignment: .leading, spacing: 10) {
                 ForEach(UsesView.kinds) { k in
@@ -795,7 +795,7 @@ private struct UsesStep: View {
             }
             .buttonStyle(.pill(ink: true))
             .disabled(picked.isEmpty || saving)
-            // Skipped, Home offers it once later ("Tell Egghead Notes what it's for").
+            // Skipped, Home offers it once later ("Tell Syft Notes what it's for").
             Button("Skip for now", action: next).buttonStyle(.textLink).disabled(saving)
         }
         .navigationBarBackButtonHidden()
@@ -879,8 +879,8 @@ private struct YoureIn: View {
 
     private var remindersAbout: String {
         switch reminders {
-        case .authorized?, .provisional?, .ephemeral?: "Egghead Notes tells you when a class starts, and before work is due."
-        case .denied?: "They're off for Egghead Notes. Turn them on in the Settings app, then Egghead Notes."
+        case .authorized?, .provisional?, .ephemeral?: "Syft Notes tells you when a class starts, and before work is due."
+        case .denied?: "They're off for Syft Notes. Turn them on in the Settings app, then Syft Notes."
         default: "So you can record it in one tap, and before work is due."
         }
     }
@@ -990,13 +990,20 @@ private struct SetupScreen<Content: View, Foot: View>: View {
         let margin = regular ? Space.s10 : Space.pageCompact
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                if logo { Doodle("hello", height: 120).padding(.bottom, 24) }
+                if logo { SyftHello(height: 120).padding(.bottom, 24) }
                 if let step {
                     Text(step).textStyle(.meta).foregroundStyle(.inkSubtle).padding(.bottom, 6)
                 }
-                Text(title).textStyle(logo ? .date : .docTitle).foregroundStyle(.ink)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityAddTraits(.isHeader)
+                // The welcome's title is the app's name: its wordmark.
+                Group {
+                    if logo {
+                        SyftWordmark(size: 40).accessibilityLabel(title)
+                    } else {
+                        Text(title).textStyle(.docTitle).foregroundStyle(.ink)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .accessibilityAddTraits(.isHeader)
                 if let lede {
                     Text(lede).textStyle(.lede).foregroundStyle(.inkMuted)
                         .fixedSize(horizontal: false, vertical: true)
@@ -1264,7 +1271,7 @@ private struct ScanSheet: View {
                 .ignoresSafeArea()
                 .overlay(alignment: .bottom) {
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("Point it at the QR code in Egghead Notes on your computer.")
+                        Text("Point it at the QR code in Syft Notes on your computer.")
                             .textStyle(.body).foregroundStyle(.ink)
                             .fixedSize(horizontal: false, vertical: true)
                         Button("Type the address instead", action: typeInstead).buttonStyle(.textLink)

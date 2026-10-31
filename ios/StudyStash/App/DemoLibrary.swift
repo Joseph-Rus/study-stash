@@ -3,7 +3,7 @@ import UIKit
 import Synchronization
 
 /// A library that lives in the app: made-up classes, lectures with notes, due work, a calendar and answers, for
-/// trying Egghead Notes without a computer (and for App Review). Every /api/v2 request to `demo.studystash.app` is
+/// trying Syft Notes without a computer (and for App Review). Every /api/v2 request to `demo.studystash.app` is
 /// answered here, by a URLProtocol on the app's session.
 final class DemoLibrary: URLProtocol, @unchecked Sendable {
     static let host = "demo.studystash.app"
@@ -154,7 +154,7 @@ final class DemoLibrary: URLProtocol, @unchecked Sendable {
         // Setup's pictures and tests: 123456 pairs, any other code is refused in the library's words.
         case ("POST", "/api/v2/devices/pair"):
             guard sent["code"] as? String == "123456" else {
-                return json(["error": "That code isn't right, or it's more than ten minutes old. Make a new one in Egghead Notes' Settings."], 401)
+                return json(["error": "That code isn't right, or it's more than ten minutes old. Make a new one in Syft Notes' Settings."], 401)
             }
             return json(["device": ["id": "demo", "name": sent["name"] as? String ?? "This phone", "added": iso(0)]])
         default:
