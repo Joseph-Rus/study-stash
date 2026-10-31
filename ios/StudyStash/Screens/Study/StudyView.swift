@@ -203,7 +203,7 @@ struct StudyView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             EmptyText(over ? "The ones you have stay until the new ones are ready."
-                      : "Egghead Notes reads the notes the way Ask does and writes questions from them. It takes a moment.")
+                      : "Syft Notes reads the notes the way Ask does and writes questions from them. It takes a moment.")
         }
         .padding(.horizontal, Space.pageCompact)
         .padding(.vertical, 24)

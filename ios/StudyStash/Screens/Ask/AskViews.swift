@@ -1,6 +1,6 @@
 import SwiftUI
 
-// Ask, as the chat screens of the Claude and ChatGPT apps have it, in Egghead Notes' look: no big title, the chats
+// Ask, as the chat screens of the Claude and ChatGPT apps have it, in Syft Notes' look: no big title, the chats
 // before on the left, the answering AI's own mark and name in the middle, New chat on the right; a nearly empty page
 // until something's asked; the question in a quiet bubble on the right and the answer full width under it, the AI's
 // own thinking mark while there are no words yet, then the lectures it used as small chips, who answered, Copy and Ask

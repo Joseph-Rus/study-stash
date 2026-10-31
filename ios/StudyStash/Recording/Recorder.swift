@@ -87,7 +87,7 @@ final class Recorder {
         guard !isActive else { return }
         phase = .preparing("Getting the microphone…")
         guard await AVAudioApplication.requestRecordPermission() else {
-            phase = .failed("Egghead Notes can't use the microphone. Turn it on in Settings, then Egghead Notes.")
+            phase = .failed("Syft Notes can't use the microphone. Turn it on in Settings, then Syft Notes.")
             return
         }
         let id = Recording.newID()

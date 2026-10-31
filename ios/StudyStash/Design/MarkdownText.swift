@@ -75,7 +75,7 @@ struct MarkdownText: View {
                         Wash {
                             HStack(alignment: .firstTextBaseline, spacing: 8) {
                                 Icon("hub", size: 15, relativeTo: .subheadline).foregroundStyle(.inkSubtle)
-                                Text("There's a diagram here. Egghead Notes on your computer shows it.")
+                                Text("There's a diagram here. Syft Notes on your computer shows it.")
                                     .textStyle(.summary).foregroundStyle(.inkMuted).fixedSize(horizontal: false, vertical: true)
                             }
                         }

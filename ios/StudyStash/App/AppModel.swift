@@ -538,7 +538,7 @@ extension AppModel {
         #endif
     }
 
-    /// Signed in to Google: the link to Egghead Notes' folder in their Drive, which the app's requests to
+    /// Signed in to Google: the link to Syft Notes' folder in their Drive, which the app's requests to
     /// `drive.studystash.app` go through from now on.
     func startDrive(_ account: GoogleAccount) {
         let space = Self.driveSpace
@@ -595,7 +595,7 @@ extension AppModel {
         if on {
             Task { await link.foreground(true) }
         } else {
-            let id = UIApplication.shared.beginBackgroundTask(withName: "Egghead Notes' box")
+            let id = UIApplication.shared.beginBackgroundTask(withName: "Syft Notes' box")
             Task {
                 await link.foreground(false)
                 UIApplication.shared.endBackgroundTask(id)

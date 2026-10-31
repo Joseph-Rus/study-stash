@@ -34,7 +34,7 @@ struct UpNextView: View {
 /// What the widgets say with nothing to say.
 enum UpNextWords {
     /// Before the app has told the widgets anything.
-    static let notYet = "Open Egghead Notes to see what's next."
+    static let notYet = "Open Syft Notes to see what's next."
     static let nothingOn = "Nothing on your calendar today."
     static let nothingDue = "Nothing to hand in."
 }
@@ -197,11 +197,11 @@ struct WidgetRecordPill: View {
     }
 }
 
-/// Record a class from a widget: opens Egghead Notes recording it (`studystash://record?class=`), as tapping it in Up
+/// Record a class from a widget: opens Syft Notes recording it (`studystash://record?class=`), as tapping it in Up
 /// next does. Control Center, the Action button and Siri use `StartRecordingIntent`, for the class on now.
 struct RecordClassIntent: AppIntent {
     static let title: LocalizedStringResource = "Record"
-    static let description = IntentDescription("Starts recording a class in Egghead Notes.")
+    static let description = IntentDescription("Starts recording a class in Syft Notes.")
     static let openAppWhenRun = true
     static let isDiscoverable = false
 
@@ -446,7 +446,7 @@ struct UpNextInline: View {
         } else if let d = glance?.dueRows(at: now, count: 1).first {
             Text(d.sentence(at: now))
         } else {
-            Text(glance == nil ? "Egghead Notes" : "Nothing on today")
+            Text(glance == nil ? "Syft Notes" : "Nothing on today")
         }
     }
 }

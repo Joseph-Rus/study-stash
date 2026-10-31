@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Build Egghead Notes for iPhone and iPad and send it to App Store Connect (TestFlight first, then the App Store).
+# Build Syft Notes for iPhone and iPad and send it to App Store Connect (TestFlight first, then the App Store).
 #   ios/release.sh            archive, then upload
 #   ios/release.sh --local    archive and export an .ipa into ios/build/export, without uploading
 # Needs: Xcode signed in to the Apple ID on the team in project.yml (DEVELOPMENT_TEAM; Xcode → Settings → Accounts), and

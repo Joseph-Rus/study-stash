@@ -62,11 +62,11 @@ struct PauseRecordingIntent: LiveActivityIntent {
     }
 }
 
-/// Record: opens Egghead Notes recording, into the class on now (Control Center, the Action button, Siri). A widget's
+/// Record: opens Syft Notes recording, into the class on now (Control Center, the Action button, Siri). A widget's
 /// Record, for its class, is `RecordClassIntent`.
 struct StartRecordingIntent: AppIntent {
     static let title: LocalizedStringResource = "Record"
-    static let description = IntentDescription("Starts recording in Egghead Notes, into the class on your calendar now.")
+    static let description = IntentDescription("Starts recording in Syft Notes, into the class on your calendar now.")
     static let openAppWhenRun = true
 
     func perform() async throws -> some IntentResult {

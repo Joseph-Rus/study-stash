@@ -157,7 +157,7 @@ struct AddFilesView: View {
         if lecture != nil, let cls = className, !cls.isEmpty, cls != "Unsorted" {
             Highlight(cls, hue: app.hue(of: cls)).padding(.top, 6)
         }
-        Text("Egghead Notes reads what you attach on your computer, handwriting too. Notes and Ask use what's in it.")
+        Text("Syft Notes reads what you attach on your computer, handwriting too. Notes and Ask use what's in it.")
             .textStyle(.lede).foregroundStyle(.inkMuted)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.top, 8)
@@ -258,7 +258,7 @@ struct AddFilesView: View {
             .textStyle(.docTitle)
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityAddTraits(.isHeader)
-        Text("Egghead Notes reads them on your computer, handwriting too. Notes and Ask use what's in them.")
+        Text("Syft Notes reads them on your computer, handwriting too. Notes and Ask use what's in them.")
             .textStyle(.lede).foregroundStyle(.inkMuted)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.top, 8)
@@ -495,7 +495,7 @@ private struct GoodNotesHowTo: View {
                     VStack(alignment: .leading, spacing: 12) {
                         step(1, "Open the notebook.")
                         step(2, "Tap Share, then Export.")
-                        step(3, "Choose GoodNotes, then Egghead Notes.")
+                        step(3, "Choose GoodNotes, then Syft Notes.")
                     }
                 }
                 Text("Or, if the notebook is already in Files:")
