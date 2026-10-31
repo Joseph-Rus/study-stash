@@ -269,13 +269,11 @@ private struct AskThread: View {
 
     // MARK: before anything's asked
 
-    /// The pixel s, the answering AI's mark under it, and one line, in the middle of the page.
+    /// The pixel s and one line, in the middle of the page: our mark alone (the header names the AI that answers, in
+    /// words).
     private var start: some View {
         VStack(spacing: 16) {
             SyftMark(height: 96)
-            if let engine = engines.engine {
-                BrandMark(engine, size: 22, relativeTo: .title)
-            }
             Text(emptyLine).textStyle(.title).foregroundStyle(.ink)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
@@ -410,7 +408,8 @@ private struct AskThread: View {
     }
 }
 
-/// The middle of Ask's header: the answering AI's mark and name; in a chat, its title over them.
+/// The middle of Ask's header: the answering AI's name; in a chat, its title over the AI's small mark and name. Before
+/// anything's asked the page shows the pixel s alone, so the AI is named in words only.
 private struct AskHeader: View {
     var engine: AskEngine?
     var title: String?
@@ -421,7 +420,7 @@ private struct AskHeader: View {
                 Text(title).textStyle(.buttonSmall).foregroundStyle(.ink).lineLimit(1)
             }
             HStack(spacing: 6) {
-                if let engine { BrandMark(engine, size: title == nil ? 18 : 12, relativeTo: title == nil ? .body : .caption) }
+                if let engine, title != nil { BrandMark(engine, size: 12, relativeTo: .caption) }
                 Text(engine?.name ?? "Ask")
                     .textStyle(title == nil ? .button : .micro)
                     .foregroundStyle(title == nil ? Color.ink : .inkMuted)
@@ -434,10 +433,10 @@ private struct AskHeader: View {
     }
 }
 
-/// One question and its answer: the question in a quiet bubble on the right; while there are no words yet, the
-/// answering AI's own thinking mark and what's happening; the answer full width in the notes' type as it's written;
-/// then the lectures it used as small chips, who answered (its mark), Copy and Ask again. A question with no answer
-/// says why in one line, with Try again.
+/// One question and its answer: the question in a quiet bubble on the right; while there are no words yet, the s's
+/// hopping bits and what's happening, the AI named in words; the answer full width in the notes' type as it's written;
+/// then the lectures it used as small chips, who answered (its small mark and name), Copy and Ask again. A question
+/// with no answer says why in one line, with Try again.
 private struct TurnView: View {
     @Environment(AppModel.self) private var app
     @Environment(\.accessibilityReduceMotion) private var still
@@ -447,7 +446,7 @@ private struct TurnView: View {
     /// Where the thread is: a class's own Ask doesn't name the class on every question.
     var inScope: AskScope
     var stage: AskStage
-    /// The AI answering now (for the thinking mark).
+    /// The AI answering now, named in the words while it works.
     var engine: AskEngine?
     var overDrive: Bool
     var open: (AskTurn.Source, Double?) -> Void
@@ -478,7 +477,10 @@ private struct TurnView: View {
                         .accessibilityElement(children: .combine)
                 }
                 if asking || pacing {
-                    ThinkingMark(engine: engine, size: 18).padding(.top, -4)
+                    // More on its way: the s's bits hopping under the words, the only thing moving.
+                    SyftLoader(.hoppingBits, height: 14, label: LocalizedStringKey(engine.map { "\($0.name) is writing" } ?? "Writing"))
+                        .padding(.leading, 40)
+                        .padding(.top, -4)
                 }
             }
 
@@ -569,21 +571,21 @@ private struct TurnView: View {
         .accessibilityLabel("You asked: \(turn.question)")
     }
 
-    /// No words yet: the AI's own thinking mark and what's happening, as far as the phone can see.
+    /// No words yet: the s's bits hopping, the only thing moving (never beside the AI's own mark), and what's
+    /// happening, as far as the phone can see, naming the AI ("Claude is reading your notes…").
     private var waiting: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 10) {
                 SyftLoader(.hoppingBits, height: 18)
-                ThinkingMark(engine: engine, size: 22)
-                Text(stage.words(overDrive: overDrive)).textStyle(.body).foregroundStyle(.inkMuted)
-                    .thinkingShimmer(engine)
+                Text(stage.words(overDrive: overDrive, engine: engine)).textStyle(.body).foregroundStyle(.inkMuted)
                     .contentTransition(.opacity)
                     .animation(.smooth, value: stage)
             }
             if slow && overDrive {
+                // Under the words: past the loader (18 tall, twice as wide) and the gap.
                 Text("Google Drive takes a few seconds.")
                     .textStyle(.meta).foregroundStyle(.inkSubtle)
-                    .padding(.leading, 32)
+                    .padding(.leading, 46)
                     .transition(.opacity)
             }
         }

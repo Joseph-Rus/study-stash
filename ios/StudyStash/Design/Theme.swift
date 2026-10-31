@@ -252,3 +252,23 @@ extension Color {
     /// One of the pixel s's colours (SyftPalette).
     init(syft: UIColor) { self.init(uiColor: syft) }
 }
+
+/// One of the pixel s's cells as a shape, at any size: a rounded square with the mark's corners (1.8 on its 6.6 cell,
+/// about 27 % of the side; SyftCells in Design/Syft.swift). What means recording is one of these, never a circle: the
+/// record dot (red), its ring while paused (`strokeBorder`), and each cell of the level.
+struct SyftCellShape: InsettableShape {
+    static let corner: CGFloat = 1.8 / 6.6
+    private var inset: CGFloat = 0
+
+    func path(in rect: CGRect) -> Path {
+        // Inset (a ring's stroke), the corner shrinks with it, so the ring's outside edge is the cell's.
+        let side = min(rect.width, rect.height)
+        return Path(roundedRect: rect.insetBy(dx: inset, dy: inset), cornerRadius: max(0, side * Self.corner - inset), style: .circular)
+    }
+
+    func inset(by amount: CGFloat) -> SyftCellShape {
+        var shape = self
+        shape.inset += amount
+        return shape
+    }
+}

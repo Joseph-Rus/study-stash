@@ -106,16 +106,17 @@ struct WidgetSwatch: View {
     }
 }
 
-/// The record dot, as the desktop's sidebar shows what's recording: a small red dot; paused, a red ring.
+/// The record dot, as the desktop's sidebar shows what's recording: one red cell of the pixel s; paused, a red ring
+/// of one.
 struct LiveDot: View {
     var paused = false
     var size: CGFloat = 9
     var body: some View {
         Group {
             if paused {
-                Circle().strokeBorder(Color.record, lineWidth: max(1.5, size / 6))
+                SyftCellShape().strokeBorder(Color.record, lineWidth: max(1.5, size / 6))
             } else {
-                Circle().fill(Color.record)
+                SyftCellShape().fill(Color.record)
             }
         }
         .frame(width: size, height: size)

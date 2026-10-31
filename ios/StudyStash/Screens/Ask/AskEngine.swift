@@ -2,8 +2,8 @@ import SwiftUI
 
 // Which AI answers Ask, shown by its own mark, as the desktop shows it (Assets/Brands, Controls/Icon.cs): the marks are
 // their owners' (Anthropic, OpenAI, Google, Ollama), downloaded unchanged and never recoloured or redrawn, shown only to
-// say which product answers. While it thinks, each shows it the way its own product does, redrawn as motion and not
-// as its logo (ThinkingMark, in ThinkingMotion.swift; docs/thinking-animations.md says what each is based on).
+// say which product answers: small and still, in the header and under a finished answer. Never beside our own mark or
+// loader: while it works, the s's hopping bits are the only thing moving and the AI is named in words.
 
 /// The AI the library asks: Claude, ChatGPT (through Codex), Gemini or Ollama.
 enum AskEngine: String, Codable, Sendable, CaseIterable {
