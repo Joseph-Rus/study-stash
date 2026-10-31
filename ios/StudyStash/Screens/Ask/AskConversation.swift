@@ -136,11 +136,12 @@ enum AskStage: Sendable, Equatable {
     /// Its words are arriving.
     case writing
 
-    /// What the page says while there are no words yet: "Asking your laptop…", then "Reading your notes…".
-    func words(overDrive: Bool) -> String {
+    /// What the page says while there are no words yet: "Asking your laptop…", then "Claude is reading your notes…"
+    /// (just "Reading your notes…" while it isn't known which AI answers). The AI is named in words, not by its mark.
+    func words(overDrive: Bool, engine: AskEngine? = nil) -> String {
         switch self {
         case .sending: overDrive ? "Asking your laptop…" : "Asking your library…"
-        case .reading, .writing: "Reading your notes…"
+        case .reading, .writing: engine.map { "\($0.name) is reading your notes…" } ?? "Reading your notes…"
         }
     }
 }

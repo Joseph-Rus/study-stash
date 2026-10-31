@@ -310,6 +310,13 @@ import Testing
         #expect(Recording.newID() != Recording.newID())
     }
 
+    @Test func theLevelLightsWholeCellsFromTheBottom() {
+        // Silence still shows it's recording (the bottom cell); a loud moment all four; never more, never half a cell.
+        #expect([0, 0.2, 0.26, 0.5, 0.74, 0.9, 1, 1.5].map { LevelCells.lit($0) } == [1, 1, 2, 2, 3, 4, 4, 4])
+        // Four cells on the mark's pitch: three gaps and a cell, as the s's grid has them.
+        #expect(abs(LevelCells.span(4) - 30.6) < 0.001)
+    }
+
     @Test func transcriptLinesAsTheLibraryReadsThem() {
         var r = Recording(id: "phone-x", started: .now)
         r.segments = [.init(start: 5, text: " Hello there "), .init(start: 65, text: ""), .init(start: 3723, text: "Much later")]

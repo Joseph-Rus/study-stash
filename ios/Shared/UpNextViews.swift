@@ -178,8 +178,8 @@ struct WidgetRecordPill: View {
         Button(intent: RecordClassIntent(className: className)) {
             HStack(spacing: 8) {
                 ZStack {
-                    Circle().fill(full ? Color.record : .primary)
-                    Circle().fill(full ? Color.onRecord : Color.clear).frame(width: 8, height: 8)
+                    SyftCellShape().fill(full ? Color.record : .primary)
+                    SyftCellShape().fill(full ? Color.onRecord : Color.clear).frame(width: 8, height: 8)
                 }
                 .frame(width: 24, height: 24)
                 .widgetAccentable()
