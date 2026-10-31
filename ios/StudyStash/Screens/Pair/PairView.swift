@@ -529,7 +529,7 @@ enum GoogleLink {
 
 /// Where a student gets Syft Notes for their computer, and Tailscale for the phone.
 enum SetupLinks {
-    static let siteName = "study-stash-app.web.app"
+    static let siteName = "syftnotes.com"
     static let tailscale = URL(string: "https://apps.apple.com/app/tailscale/id1470499037")!
 }
 
