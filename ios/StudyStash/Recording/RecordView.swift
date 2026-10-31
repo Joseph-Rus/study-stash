@@ -283,7 +283,7 @@ private struct RecordingBar: View {
         let paused = phase == .paused
         let finishing = phase == .finishing
         return HStack(spacing: 12) {
-            Doodle("listening", height: 30, busy: phase == .recording)
+            SyftLoader(.pathTrace, height: 30, running: phase == .recording)
             PulseDot(pulsing: phase == .recording)
             Text(word).font(.atkinson(15, .bold, relativeTo: .body)).foregroundStyle(.ink).fixedSize()
             if phase == .recording { LevelBars(levels: recorder.levels) }

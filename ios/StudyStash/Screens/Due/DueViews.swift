@@ -343,7 +343,7 @@ private struct DuePage: View {
                 } else if noCanvas {
                     EmptyState(title: "Nothing to show yet",
                                detail: "Link Canvas in Syft Notes on your computer, in Settings, then Canvas. What's due shows up here.",
-                               doodle: "sleepy")
+                               mark: .oddOneOut)
                 } else {
                     lede(book).padding(.top, Space.s2)
                     calendarBar(book)
@@ -362,7 +362,7 @@ private struct DuePage: View {
         .foregroundStyle(.ink)
         .page()
         .titleOnScroll("Due", after: 44)
-        .refreshable { await load() }
+        .syftRefreshable { await load() }
         .task { await load() }
     }
 
@@ -1266,7 +1266,7 @@ struct AssignmentView: View {
         .onChange(of: app.dismissal) { asking = false }
         // The Record bar records into this assignment's class.
         .recordsInto(className)
-        .refreshable { await load() }
+        .syftRefreshable { await load() }
         .task { await load() }
     }
 

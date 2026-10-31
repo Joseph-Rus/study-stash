@@ -216,3 +216,39 @@ enum Appearance: String, CaseIterable, Identifiable, Sendable {
         }
     }
 }
+
+// MARK: - The pixel s
+
+/// Syft Notes' pixel s (Joey's Pixel Sift boards; Design/Syft.swift draws it): its colours, the same in every look,
+/// and the few that change between light and dark (the bottom row ink on a light page, mustard on a dark one).
+enum SyftPalette {
+    static let lilac = UIColor(hex: "#CDBDFF")
+    static let sky = UIColor(hex: "#A3DAF2")
+    static let coral = UIColor(hex: "#FF6E4E")
+    static let mustard = UIColor(hex: "#FFC943")
+    static let ink = UIColor(hex: "#16131D")
+    static let paper = UIColor(hex: "#FBFAF7")
+    static let white = UIColor(hex: "#FFFFFF")
+    static let meshLight = UIColor(hex: "#EFEDE8")
+    static let meshDark = UIColor(hex: "#24212D")
+    static let ghostDark = UIColor(hex: "#2E2A39")
+    /// Path Trace's empty grid on its dark tile (the motion board's mesh-l1).
+    static let traceMeshDark = UIColor(hex: "#1F1C27")
+    static let muted = UIColor(hex: "#5C5B63")
+
+    /// The bottom row and the ink bit: ink on a light page, mustard on a dark one.
+    static let base = UIColor(light: "#16131D", dark: "#FFC943")
+    /// The empty grid behind the s.
+    static let mesh = UIColor(light: "#EFEDE8", dark: "#24212D")
+    /// Path Trace's unlit cells.
+    static let ghost = UIColor(light: "#EFEDE8", dark: "#2E2A39")
+    /// Odd One Out and Pop Back's cells: ink, or paper in the dark.
+    static let cell = UIColor(light: "#16131D", dark: "#FBFAF7")
+    /// The tile behind the mark (an avatar, the app icon): white, or ink in the dark.
+    static let tile = UIColor(light: "#FFFFFF", dark: "#16131D")
+}
+
+extension Color {
+    /// One of the pixel s's colours (SyftPalette).
+    init(syft: UIColor) { self.init(uiColor: syft) }
+}

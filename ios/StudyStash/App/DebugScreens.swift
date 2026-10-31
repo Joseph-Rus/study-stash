@@ -158,6 +158,7 @@ struct ComponentGallery: View {
                 case 2: second
                 case 3: third
                 case 4: icons
+                case 5: SyftGallery()
                 default: first
                 }
             }
