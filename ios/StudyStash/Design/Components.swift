@@ -8,7 +8,7 @@ import SwiftUI
 
 // MARK: - The logo
 
-/// Syft Notes' own logo, the app icon (Eli's egghead, glasses and bow tie, on a paper tile), with the app
+/// Syft Notes' own logo, the app icon (the pixel s on its white tile, or the dark tile in dark mode), with the app
 /// icon's rounded corners: wherever the app shows its logo (setup, pairing, About). Never a stand-in drawn some other
 /// way. `size` is its width and height in points.
 struct StudyStashLogo: View {
