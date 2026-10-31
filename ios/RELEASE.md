@@ -9,8 +9,8 @@ The app's name in App Store Connect (App Information → Name) is set by hand th
    certificate and profiles itself. Done on Joey's Mac by 2026-10-23: `app.studystash.ios` and
    `app.studystash.ios.widgets` are registered on that team, with App Store profiles.
 2. **App Store Connect → Apps → +, New App** (Apple's API can't make this; only the website or Xcode's Distribute
-   window can): iOS, name *Nerd Notes*, primary language English (U.S.), bundle ID `app.studystash.ios`, SKU
-   `nerdnotes-ios`, Full Access. Until it exists an upload stops at "Error Downloading App Information" (the
+   window can): iOS, name *Syft Notes* (it was made as Nerd Notes, then Pylorum; rename it under App Information → Name), primary language English (U.S.), bundle ID `app.studystash.ios`, SKU
+   `nerdnotes-ios` (a SKU can never change, and nobody sees it), Full Access. Until it exists an upload stops at "Error Downloading App Information" (the
    distribution log says `missingApp`).
 3. **TestFlight → Internal Testing → +**: a group (say *Team*) with **automatic distribution** on, and yourself in it.
    Every build uploaded after that shows in the TestFlight app on your phone by itself.
