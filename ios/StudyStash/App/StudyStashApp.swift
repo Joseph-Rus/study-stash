@@ -25,6 +25,8 @@ struct StudyStashApp: App {
     var body: some Scene {
         WindowGroup {
             RootView()
+                // The pixel s sorting itself in, over the first screen until it's ready.
+                .overlay { StartSplash() }
                 .environment(app)
                 // The desktop's look: no accent (the tint is ink), one typeface, the page's white behind.
                 .tint(.ink)

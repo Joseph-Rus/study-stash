@@ -62,6 +62,15 @@ targets:
           - AtkinsonHyperlegibleNext-SemiBold.ttf
           - AtkinsonHyperlegibleNext-Bold.ttf
           - AtkinsonHyperlegibleNext-ExtraBold.ttf
+          # The wordmark's Archivo (OFL): "syft" in Black Italic, " notes" in Regular.
+          - Archivo-BlackItalic.ttf
+          - Archivo-Regular.ttf
+        # The launch screen: the pixel s, still, on the splash's own background (white, or ink in the dark), the same
+        # size and place as the animated splash that follows it (Design/Syft.swift).
+        UILaunchScreen:
+          UIColorName: LaunchBackground
+          UIImageName: LaunchMark
+          UIImageRespectsSafeAreaInsets: false
         # The library is on the student's own tailnet: plain http at its Tailscale IP when https (Tailscale Serve)
         # isn't set up. Tailscale encrypts that traffic itself.
         NSAppTransportSecurity:
